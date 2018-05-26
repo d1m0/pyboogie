@@ -20,4 +20,6 @@ setuptools.setup(
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: GNU General Public License (GPL)",
     ),
+    test_suite='nose.collector',
+    tests_require=['nose'],
 )

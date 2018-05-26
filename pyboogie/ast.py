@@ -1,8 +1,8 @@
 #pylint: disable=no-self-argument,multiple-statements
 from .grammar import BoogieParser
-from pyparsing import ParseResults as PR, Token, ParserElement as PE
+from pyparsing import ParseResults as PR, ParserElement as PE
 from functools import reduce
-from typing import List, Iterable, Set, TYPE_CHECKING, Any, Union, Dict, TypeVar, Callable
+from typing import List, Iterable, Set, TYPE_CHECKING, Any, Union, Dict, TypeVar, Callable, Tuple
 
 # Generic ASTNode
 class AstNode:
@@ -187,7 +187,7 @@ class AstBody(AstNode):
                 "\n}"
 
 class AstImplementation(AstNode):
-    def __init__(s, name: str, signature: Any, body: List[AstNode]) -> None:
+    def __init__(s, name: str, signature: Any, body: AstBody) -> None:
         AstNode.__init__(s, name, signature, body)
     def __str__(s) -> str:
         return "implementation " + s.name + " " + str(s.signature) + str(s.body)
@@ -203,6 +203,11 @@ def _mkBinExp(lhs: Any, op: Any, rhs: Any) -> AstBinExpr:
   assert isinstance(lhs, AstExpr) and isinstance(rhs, AstExpr) and \
          isinstance(op, str)
   return AstBinExpr(lhs, op, rhs)
+
+def listify(p: "PR[T]") -> "List[T]":
+    if (len(p) == 0):
+        return [] 
+    return [x for x in p]
 
 class AstBuilder(BoogieParser[AstNode]):
   def onAtom(s, prod: PE, st: str, loc: int, toks: PR) -> Iterable[AstNode]:
@@ -295,18 +300,18 @@ class AstBuilder(BoogieParser[AstNode]):
     return [ toks[0] ];
   def onBody(s, prod: PE, st: str, loc: int, toks: PR) -> Iterable[AstNode]:
     assert len(toks) == 2;
-    return [ AstBody(toks[0], toks[1]) ]
+    return [ AstBody(listify(toks[0]), listify(toks[1])) ]
   def onImplementationDecl(s, prod: PE, st: str, loc: int, toks: PR) -> Iterable[AstNode]:
     attrs = toks[0]
     assert(len(attrs) == 0)
     name = str(toks[1])
     signature = toks[2]
     assert len(signature) == 3
-    type_args, parameters, returns = signature
+    (type_args, parameters, returns) = signature # type: Tuple[PR[Any], PR[AstBinding], PR[AstBinding]]
     # For now ignore anything other than the argument list
     assert len(type_args) == 0, "NYI: Imeplementation type args: {}".format(type_args)
-    body = toks[3][0]
-    return [ AstImplementation(name, (parameters, returns), body) ]
+    body = toks[3][0]  # type: AstBody
+    return [ AstImplementation(name, (listify(parameters), listify(returns)), body) ]
   def onLabeledStatement(s, prod: PE, st: str, loc: int, toks: PR) -> Iterable[AstNode]:
     label = str(toks[0])
     stmt = toks[1]
