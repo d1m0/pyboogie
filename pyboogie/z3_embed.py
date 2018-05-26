@@ -260,8 +260,12 @@ class Z3ProxySolver:
             return
 
         # First interrupt politely
-        kill(s._proc.pid, SIGINT)
-        s._proc.join(1)
+        if (s._proc.pid is not None):
+            kill(s._proc.pid, SIGINT)
+            s._proc.join(1)
+        else:
+            # TODO: If no pid can we safely assume shut down?
+            return
 
         if s._proc.exitcode is not None:
             return
@@ -274,8 +278,9 @@ class Z3ProxySolver:
             return
 
         # And now we ran out of patience
-        kill(s._proc.pid, SIGKILL)
-        s._proc.join()
+        if (s._proc.pid is not None):
+            kill(s._proc.pid, SIGKILL)
+            s._proc.join()
 
 
 z3ProcessPoolCond = Condition()
@@ -339,7 +344,7 @@ def getSolver() -> Z3ProxySolver:
 
 
 def releaseSolver(solver: Optional[Z3ProxySolver]) -> None:
-    if (solver == None):
+    if (solver is None):
         return
     try:
         z3ProcessPoolCond.acquire()
@@ -407,6 +412,7 @@ def counterex(pred: z3.ExprRef, timeout: Optional[int]=None, comm: str ="") -> S
                 continue
             break
 
+        assert(m is not None)
         return m
     finally:
         if (s):

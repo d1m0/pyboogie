@@ -1,13 +1,13 @@
 #pylint: disable=no-self-argument,multiple-statements
 from .grammar import BoogieParser
-from pyparsing import ParseResults, Token, ParserElement
+from pyparsing import ParseResults as PR, Token, ParserElement as PE
 from functools import reduce
 from typing import List, Iterable, Set, TYPE_CHECKING, Any, Union, Dict, TypeVar, Callable
 
 # Generic ASTNode
 class AstNode:
     def __init__(s, *args: Any) -> None:
-        s._children = args;
+        s._children = args
         real_init = s.__init__.__code__ # type: ignore
         assert ((real_init.co_argcount - 1 == len(args) and\
                 real_init.co_argcount == len(real_init.co_varnames)) or \
@@ -18,7 +18,7 @@ class AstNode:
         s._dict = {} # type: Dict[str, Any]
         for (n,v) in zip(real_init.co_varnames[1:], args):
             if (real_init.co_flags & 0x04) and n==real_init.co_varnames[-1]:
-                l = len(real_init.co_varnames) - 2;
+                l = len(real_init.co_varnames) - 2
                 s._dict[n] = args[l:]
             else:
                 s._dict[n] = v;
@@ -199,19 +199,10 @@ class AstProgram(AstNode):
     def __init__(s, decls: Iterable[AstDecl_T]) -> None: AstNode.__init__(s, decls)
     def __str__(s) -> str: return "\n".join(map(str, s.decls))
 
-
-if TYPE_CHECKING:
-  PE=ParserElement[AstNode]
-  PR=ParseResults[AstNode]
-else:
-  PE=None
-  PR=None
-
 def _mkBinExp(lhs: Any, op: Any, rhs: Any) -> AstBinExpr:
   assert isinstance(lhs, AstExpr) and isinstance(rhs, AstExpr) and \
          isinstance(op, str)
   return AstBinExpr(lhs, op, rhs)
-
 
 class AstBuilder(BoogieParser[AstNode]):
   def onAtom(s, prod: PE, st: str, loc: int, toks: PR) -> Iterable[AstNode]:

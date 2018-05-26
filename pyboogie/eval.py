@@ -11,7 +11,7 @@ from .bb import Function, Label_T, BB
 from .interp import Store, store_to_expr
 from itertools import permutations
 from copy import deepcopy
-from typing import TypeVar, List, Dict, Iterator, Tuple, Any
+from typing import TypeVar, List, Dict, Iterator, Tuple, Any, Optional
 import z3
 
 T=TypeVar("T")
@@ -37,14 +37,11 @@ def evalPred(boogie_expr: AstExpr, env: Store) -> bool:
 # instantiations of the template that holds for all elements of the series.
 def instantiateAndEval(inv: AstExpr,
         vals: List[Store],
-        var_names : List[str] = None,
-        const_names : List[str] = None) -> List[AstExpr]:
+        arg_names : Optional[List[str]] = None,
+        arg_consts: Optional[List[str]] = None) -> List[AstExpr]:
 
-    if (var_names == None):
-        var_names = ["_sv_x", "_sv_y", "_sv_z"]
-
-    if (const_names == None):
-        const_names = ["_sc_a", "_sc_b", "_sc_c"]
+    var_names = arg_names if (arg_names is not None) else ["_sv_x", "_sv_y", "_sv_z"] # type: List[str]
+    const_names = const_names if (const_names is not None ) else ["_sc_a", "_sc_b", "_sc_c"] # type: List[str]
 
     res = [] # type: List[AstExpr]
     symVs = [ x for x in expr_read(inv) if x in var_names ]

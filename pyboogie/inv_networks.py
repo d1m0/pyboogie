@@ -1,8 +1,8 @@
 #pylint: disable=no-self-argument
-from ast import ast_and, replace, AstBinExpr, AstAssert, AstAssume, \
+from .ast import ast_and, replace, AstBinExpr, AstAssert, AstAssume, \
         AstTrue, AstExpr, AstStmt, _force_expr, ReplMap_T
-from util import split, nonempty, powerset
-from z3_embed import expr_to_z3, Unknown, counterex, \
+from .util import split, nonempty, powerset
+from .z3_embed import expr_to_z3, Unknown, counterex, \
         Implies, And, tautology, satisfiable, unsatisfiable, to_smt2,\
         get_typeenv
 from .paths import nd_bb_path_to_ssa, _ssa_stmts,\

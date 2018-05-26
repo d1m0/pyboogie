@@ -1,10 +1,10 @@
 from .bb import BB, Function
 from copy import copy
+from .util import unique
 from .ast import AstAssert, AstAssume, AstHavoc, AstAssignment, AstGoto, \
   AstReturn, AstUnExpr, AstBinExpr, AstNumber, AstId, AstTrue, AstFalse, \
   AstExpr, AstMapIndex, ast_and, AstForallExpr, AstBinding, AstIntType
 from typing import Any, Dict, Callable, Union, Iterable, Tuple, Set, List, NamedTuple
-from .util import unique
 
 class FuncInterp:
     def __init__(self, explicit_cases: Dict["BoogieVal", "BoogieVal"], default: "BoogieVal") -> None:
@@ -300,7 +300,7 @@ def trace_n_from_start(fun: Function, starting_store: Store, nsteps: int, rand: 
 
 if __name__ == "__main__":
   from argparse import ArgumentParser
-  from util import error
+  from .util import error
   from random import randint, choice
 
   p = ArgumentParser(description="interpeter")

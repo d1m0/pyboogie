@@ -4,7 +4,7 @@ from .ast import parseAst, AstImplementation, AstLabel, \
         AstMapUpdate
 from collections import namedtuple
 from .util import unique, get_uid
-from typing import Dict, List, Iterable, Tuple, Iterator, Any, Set
+from typing import Dict, List, Iterable, Tuple, Iterator, Any, Set, Optional
 
 Label_T = str
 Bindings_T = Iterable[Tuple[str, AstType]]
@@ -123,8 +123,10 @@ class Function(object):
                 isinstance(stmt, AstAssume) or
                 isinstance(stmt, AstHavoc) or
                 isinstance(stmt, AstAssignment)):
+                assert (curLbl is not None)
                 bbs[curLbl].append(stmt)
             elif (isinstance(stmt, AstGoto)):
+                assert (curLbl is not None)
                 successors[curLbl] = successors.get(curLbl, []) + list(map(str, stmt.labels))
                 curLbl = None
             elif (isinstance(stmt, AstReturn)):
@@ -205,7 +207,7 @@ class Function(object):
         return all(bb.is_gcl() for bb in self._bbs.values())
 
     def split_asserts(self) -> Tuple["Function", Dict[BB, BB]]:
-        workQ = [(None, self.entry())]  # type: List[Tuple[BB, BB]]
+        workQ = [(None, self.entry())]  # type: List[Tuple[Optional[BB], BB]]
         bbMap = {}  # type: Dict[BB, BB]
 
         while len(workQ) > 0:
