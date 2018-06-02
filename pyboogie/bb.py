@@ -92,6 +92,20 @@ class BB(List[AstStmt]):
 
         return reachable
 
+LocT = Tuple[BB, int] # Program location
+def prevLocations(l: LocT) -> List[LocT]:
+    bb, idx = l
+    if (idx > 0):
+        return [(bb, idx-1)]
+
+    return [(predBB, len(predBB)) for predBB in bb.predecessors()]
+
+def nextLocations(l: LocT) -> List[LocT]:
+    bb, idx = l
+    if (idx < len(bb)):
+        return [(bb, idx+1)]
+
+    return [(sucBB, 0) for sucBB in bb.successors()]
 
 class Function(object):
     @staticmethod
