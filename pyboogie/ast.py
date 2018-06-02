@@ -6,7 +6,12 @@ from functools import reduce
 from typing import List, Iterable, Set, TYPE_CHECKING, Any, Union, Dict, TypeVar, Callable, Tuple, NamedTuple, Type
 
 from attr import attrs, attrib
-class AstNode:  pass
+class AstNode:
+    def __eq__(self, other: object) -> bool:
+        """ Ast nodes compare via structural equality """
+        if other.__class__ != self.__class__:
+            return False
+        return self.__dict__ == other.__dict__
 
 # Types
 class AstType(AstNode): pass
@@ -146,7 +151,10 @@ class AstImplementation(AstDecl):
     returns = attrib(type = List[AstBinding])
     body = attrib(type = AstBody)
     def __str__(s) -> str:
-        return "implementation " + s.name + " (" + str(s.parameters) + ") returns (" + str(s.returns) + ")" + str(s.body)
+        return "implementation " + s.name + " (" +\
+            ",".join(map(str,s.parameters)) + ") " +\
+            ("returns (" + ",".join(map(str,s.returns)) + ")" if (len(s.returns) != 0) else "") +\
+            str(s.body)
 
 # Programs
 @attrs
@@ -180,7 +188,7 @@ def reduce_nodes(node: AstNode, cb: Callable[[AstNode, List[T]], T]) -> T:
               [ reduce_nodes(val, cb)
                   for val in node.__dict__.values() if isinstance(val, AstNode) ])
 
-def _toIds(toks: PR[Any]) -> List[AstId]:
+def _toIds(toks: "PR[Any]") -> List[AstId]:
     return [ccast(x, AstId) for x in toks]
 
 class AstBuilder(BoogieParser[AstNode]):
