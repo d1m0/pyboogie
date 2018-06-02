@@ -1,11 +1,11 @@
 from .ast import stmt_changed, AstAssignment, AstId, AstHavoc, \
-        AstAssert, AstTrue, replace, AstNode, AstExpr, AstStmt_T, AstStmt, _force_stmt
+        AstAssert, AstTrue, replace, AstNode, AstExpr, AstStmt
 from .z3_embed import Or, And, Int, And, stmt_to_z3, satisfiable,\
     model, TypeEnv_T, get_typeenv
 from .bb import BB, Label_T, Function
 from .ssa import SSAEnv, is_ssa_str, ReplMap_T, get_ssa_tenv
 from .predicate_transformers import wp_stmts, sp_stmts
-from .util import flattenList, first
+from .util import flattenList, first, ccast
 from .interp import Store
 
 from .ast import AstMapIndex
@@ -218,11 +218,9 @@ def ssa_stmt(stmt: AstStmt, prev_replm: ReplMap_T, cur_replm: ReplMap_T) -> AstS
     if isinstance(stmt, AstAssignment):
         lhs = replace(stmt.lhs, cur_replm)
         rhs = replace(stmt.rhs, prev_replm)
-        assert isinstance(lhs, AstId)
-        assert isinstance(rhs, AstExpr)
-        return AstAssignment(lhs,rhs)
+        return AstAssignment(ccast(lhs, AstId),ccast(rhs, AstExpr))
     else:
-        return _force_stmt(replace(stmt, cur_replm))
+        return ccast(replace(stmt, cur_replm), AstStmt)
 
 def _ssa_stmts(stmts: List[AstStmt], envs: List[ReplMap_T]) -> List[AstStmt]:
     return [ssa_stmt(stmts[i], envs[i], envs[i+1])

@@ -2,13 +2,14 @@ from .z3_embed import And, stmt_to_z3, satisfiable, Int,\
     maybeModel, expr_to_z3, simplify, model, TypeEnv_T,\
     _force_expr as _z3_force_expr, get_typeenv
 from .ast import expr_read, AstAssume, AstAssert, replace, AstId,\
-        AstNumber, AstExpr, _force_expr, AstStmt, ReplMap_T
+        AstNumber, AstExpr, AstStmt, ReplMap_T
 from .paths import nd_bb_path_to_ssa, \
         extract_ssa_path_vars, NondetPath, NondetSSAPath, NondetPathEnvs_T
 from .predicate_transformers import sp_stmts
 from .ssa import SSAEnv, get_ssa_tenv
 from .bb import Function, Label_T, BB
 from .interp import Store, store_to_expr
+from .util import ccast
 from itertools import permutations
 from copy import deepcopy
 from typing import TypeVar, List, Dict, Iterator, Tuple, Any, Optional
@@ -63,9 +64,9 @@ def instantiateAndEval(inv: AstExpr,
 
         inst_inv = replace(inv, { AstId(x) : AstId(varM[x]) for x in symVs })
         p = [ AstAssume(store_to_expr(x, str(i))) for (i,x) in enumerate(vals) ] # type: List[AstStmt]
-        p += [ AstAssert(_force_expr(replace(inst_inv,
+        p += [ AstAssert(ccast(replace(inst_inv,
                                  { AstId(x) : AstId(x + str(i))
-                                     for x in varM.values() })))
+                                     for x in varM.values() }), AstExpr))
                for i in range(len(vals)) ]
 
         m = maybeModel(And([stmt_to_z3(s, typeEnv) for s in p]))
@@ -76,7 +77,7 @@ def instantiateAndEval(inv: AstExpr,
                 v = m[x]
                 assert isinstance(v, int);
                 const_vals[AstId(x)] = AstNumber(v)
-            res.append(_force_expr(replace(inst_inv, const_vals)))
+            res.append(ccast(replace(inst_inv, const_vals), AstExpr))
 
     return res
 

@@ -1,7 +1,7 @@
 #pylint: disable=no-self-argument
 from .ast import ast_and, replace, AstBinExpr, AstAssert, AstAssume, \
-        AstTrue, AstExpr, AstStmt, _force_expr, ReplMap_T
-from .util import split, nonempty, powerset
+        AstTrue, AstExpr, AstStmt, ReplMap_T
+from .util import split, nonempty, powerset, ccast
 from .z3_embed import expr_to_z3, Unknown, counterex, \
         Implies, And, tautology, satisfiable, unsatisfiable, to_smt2,\
         get_typeenv
@@ -148,8 +148,8 @@ def filterCandidateInvariants(fun: Function, preCond: AstExpr, postCond: AstExpr
 
               candidate_invs = copy(cps[succ.label])
               for candidate in candidate_invs:
-                ssaed_inv = _force_expr(replace(candidate,
-                                                curFinalSSAEnv.replm()))
+                ssaed_inv = ccast(replace(candidate,
+                                         curFinalSSAEnv.replm()), AstExpr)
                 candidateSSA = expr_to_z3(ssaed_inv, tenv)
                 try:
                   c = counterex(Implies(sp, candidateSSA), timeout,
@@ -243,7 +243,7 @@ def checkInvNetwork(fun: Function, preCond: AstExpr, postCond: AstExpr, cutPoint
 
         if (len(nextBB.successors()) == 0): # This is exit
           assert nextBB == fun.exit()
-          ssaed_postcond = _force_expr(replace(postCond, curFinalSSAEnv.replm()))
+          ssaed_postcond = ccast(replace(postCond, curFinalSSAEnv.replm()), AstExpr)
           postSSAZ3 = expr_to_z3(ssaed_postcond, tenv)
           try:
             #print ("Checking path to exit {}\n {}\n {}\n {}\n".format(path, postCond, postSSAZ3, Implies(sp, postSSAZ3)))
@@ -263,7 +263,7 @@ def checkInvNetwork(fun: Function, preCond: AstExpr, postCond: AstExpr, cutPoint
             if succ.label in cps:
               # Check implication
               post = ast_and(cps[succ.label])
-              postSSA = _force_expr(replace(post, curFinalSSAEnv.replm()))
+              postSSA = ccast(replace(post, curFinalSSAEnv.replm()), AstExpr)
               postSSAZ3 = expr_to_z3(postSSA, tenv)
               #print ("Checking path from cp {} to cp {}: {}\n {}\n {}\n".format(cp, succ, path, postSSA, Implies(sp, postSSAZ3)))
               try:
@@ -276,7 +276,7 @@ def checkInvNetwork(fun: Function, preCond: AstExpr, postCond: AstExpr, cutPoint
                   # to the filter case). Try this if the implication of the
                   # conjunction of all of them fails
                   for p in cps[succ.label]:
-                    postSSA = _force_expr(replace(p, curFinalSSAEnv.replm()))
+                    postSSA = ccast(replace(p, curFinalSSAEnv.replm()), AstExpr)
                     postSSAZ3 = expr_to_z3(postSSA, tenv)
                     c = counterex(Implies(sp, postSSAZ3), timeout, "Induction(small): {}".format(Implies(sp, postSSAZ3)))
                     # If any of them doesn't hold, neither does their conj

@@ -12,7 +12,7 @@ from threading import Condition, local
 from time import time
 from random import randint
 from multiprocessing import Process, Queue as PQueue
-from .util import error
+from .util import error, ccast
 import Pyro4
 from Pyro4.util import SerializerBase
 import sys
@@ -47,7 +47,7 @@ def type_to_z3sort(ast_typ: AstType) -> z3.SortRef:
         return BoolSort()
     else:
         assert isinstance(ast_typ, AstMapType)
-        return z3.ArraySort(type_to_z3sort(ast_typ.domain), type_to_z3sort(ast_typ.range))
+        return z3.ArraySort(type_to_z3sort(ast_typ.domainT), type_to_z3sort(ast_typ.rangeT))
 
 def type_to_z3(ast_typ: AstType) -> Z3ValFactory_T:
     if isinstance(ast_typ, AstIntType):
@@ -55,8 +55,8 @@ def type_to_z3(ast_typ: AstType) -> Z3ValFactory_T:
     elif isinstance(ast_typ, AstBoolType):
         return Bool
     else:
-        assert isinstance(ast_typ, AstMapType)
         def array_fac(name: str) -> z3.ArrayRef:
+            assert isinstance(ast_typ, AstMapType)
             return z3.Array(name, type_to_z3sort(ast_typ.domainT), type_to_z3sort(ast_typ.rangeT))
         return array_fac
 def get_typeenv(f: bb_Function) -> TypeEnv_T:
@@ -584,7 +584,7 @@ def stmt_to_z3(stmt: AstNode, typeEnv: TypeEnv_T) -> z3.ExprRef:
         stmt = stmt.stmt
 
     if (isinstance(stmt, AstAssignment)):
-        lvalue = typeEnv[stmt.lhs](str(stmt.lhs))
+        lvalue = typeEnv[ccast(stmt.lhs, AstId).name](str(stmt.lhs))
         rhs = expr_to_z3(stmt.rhs, typeEnv)
         return _force_expr(lvalue == rhs)
     elif (isinstance(stmt, AstAssert)):
@@ -671,7 +671,7 @@ def z3_expr_to_boogie(expr: z3.ExprRef) -> AstExpr:
             try:
                 pars = list(map(z3_expr_to_boogie, c))
                 func = AstId(boogie_op)
-                fun = AstFuncExpr(func, *pars)
+                fun = AstFuncExpr(func, pars)
             except Exception as ex:
                 error(str(ex))
             return fun

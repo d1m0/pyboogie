@@ -1,9 +1,9 @@
 from .ast import parseAst, AstImplementation, AstLabel, \
         AstAssert, AstAssume, AstHavoc, AstAssignment, AstGoto, \
         AstReturn, AstNode, AstStmt, AstType, AstProgram, AstMapIndex,\
-        AstMapUpdate
+        AstMapUpdate, AstId
 from collections import namedtuple
-from .util import unique, get_uid
+from .util import unique, get_uid, ccast
 from typing import Dict, List, Iterable, Tuple, Iterator, Any, Set, Optional
 
 Label_T = str
@@ -123,7 +123,7 @@ class Function(object):
     @staticmethod
     def build(fun: AstImplementation) -> "Function":
         # Step 1: Break statements into basic blocks
-        bbs = {}
+        bbs = {} # type: Dict[str, BB]
         curLbl = None
         successors = {}  # type: Dict[str, List[str]]
         for stmt in fun.body.stmts:
@@ -155,9 +155,9 @@ class Function(object):
             for succ in bb.successors():
                 succ._predecessors.append(bb)
 
-        parameters = [(name, binding.typ) for binding in fun.signature[0] for name in binding.names ] # type: Bindings_T
+        parameters = [(name, binding.typ) for binding in fun.parameters for name in binding.names ] # type: Bindings_T
         local_vars = [(name, binding.typ) for binding in fun.body.bindings for name in binding.names ] # type: Bindings_T
-        returns = [(name, binding.typ) for binding in fun.signature[1] for name in binding.names ] # type: Bindings_T
+        returns = [(name, binding.typ) for binding in fun.returns for name in binding.names ] # type: Bindings_T
         f = Function(fun.name, bbs.values(), parameters, local_vars, returns)
 
         if len(list(f.exits())) != 1:
@@ -198,15 +198,28 @@ class Function(object):
             a[i] := v;
             to:
             a = a[i:=v];
+
+            This applies to multi-dimensional maps:
+            a[i][j] := v;
+            to:
+            a = a[i:=a[i][j:=v]]
         """
         for bb in self.bbs():
             for stmt_idx in range(len(bb)):
                 stmt = bb[stmt_idx]
-                if not (isinstance(stmt, AstAssignment) and
-                        isinstance(stmt.lhs, AstMapIndex)):
+                if (not isinstance(stmt, AstAssignment)):
                     continue
 
-                bb[stmt_idx] = AstAssignment(stmt.lhs.map, AstMapUpdate(stmt.lhs.map, stmt.lhs.index, stmt.rhs))
+                lhs = stmt.lhs
+                rhs = stmt.rhs
+
+                while (isinstance(lhs, AstMapIndex)):
+                    rhs = AstMapUpdate(lhs, lhs.index, rhs)
+                    assert (isinstance(lhs.map, AstMapIndex) or 
+                            isinstance(lhs.map, AstId))
+                    lhs = lhs.map
+
+                bb[stmt_idx] = AstAssignment(ccast(lhs, AstId), rhs)
 
     def to_json(self) -> Any:
         return [

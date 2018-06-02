@@ -1,202 +1,157 @@
 #pylint: disable=no-self-argument,multiple-statements
 from .grammar import BoogieParser
+from .util import ccast
 from pyparsing import ParseResults as PR, ParserElement as PE
 from functools import reduce
-from typing import List, Iterable, Set, TYPE_CHECKING, Any, Union, Dict, TypeVar, Callable, Tuple
+from typing import List, Iterable, Set, TYPE_CHECKING, Any, Union, Dict, TypeVar, Callable, Tuple, NamedTuple, Type
 
-# Generic ASTNode
-class AstNode:
-    def __init__(s, *args: Any) -> None:
-        s._children = args
-        real_init = s.__init__.__code__ # type: ignore
-        assert ((real_init.co_argcount - 1 == len(args) and\
-                real_init.co_argcount == len(real_init.co_varnames)) or \
-                real_init.co_flags & 0x04)
-
-        # Attribute names are based on the formal argument names of the
-        # most specific class constructor.
-        s._dict = {} # type: Dict[str, Any]
-        for (n,v) in zip(real_init.co_varnames[1:], args):
-            if (real_init.co_flags & 0x04) and n==real_init.co_varnames[-1]:
-                l = len(real_init.co_varnames) - 2
-                s._dict[n] = args[l:]
-            else:
-                s._dict[n] = v;
-
-    def __getattr__(s, n: str) -> Any:
-        try:
-            return s._dict[n];
-        except KeyError:
-            raise AttributeError
-
-    def __repr__(s) -> str:
-        try:
-            return s.__str__();
-        except: #pylint: disable=bare-except
-                #TODO(dimo) fix this
-            return s.__class__.__name__ + "[" + str(s._children) + "]"
-
-    # Structural equality
-    def __eq__(s, other: object) -> bool:
-        return isinstance(other, AstNode) and \
-               s.__class__ == other.__class__ and \
-               s._children == other._children
-
-    def __hash__(s) -> int:
-        try:
-          return hash((s.__class__,) + s._children)
-        except:
-          print("Can't hash: ", s)
-          raise
-
-    # Pickle
-    def __getinitargs__(s) -> Iterable[Any]:
-        return s._children
-
-ReplMap_T = Dict[AstNode, AstNode]
-def replace(ast: AstNode, m: ReplMap_T) -> AstNode:
-    if (not isinstance(ast, AstNode)):
-        return ast;
-    elif ast in m:
-        return m[ast]
-    else:
-        return ast.__class__(*[replace(x,m) for x in ast._children])
-
-T = TypeVar("T")
-def reduce_nodes(node: AstNode, cb: Callable[[AstNode, List[T]], T]) -> T:
-    return cb(node,
-              [ reduce_nodes(x, cb)
-                  for x in node._children if isinstance(x, AstNode) ])
+from attr import attrs, attrib
+class AstNode:  pass
 
 # Types
 class AstType(AstNode): pass
 class AstIntType(AstType):
-    def __init__(s) -> None:  AstNode.__init__(s)
     def __str__(s) -> str: return "int"
-
 class AstBoolType(AstType):
-    def __init__(s) -> None:  AstNode.__init__(s)
     def __str__(s) -> str: return "bool"
 
+@attrs
 class AstMapType(AstType):
-    def __init__(s, domainT: AstType, rangeT: AstType) -> None:  AstNode.__init__(s, domainT, rangeT)
-    def __str__(s) -> str: return "[{}]{}".format(str(s.domainT, s.rangeT))
+    domainT = attrib(type=AstType)
+    rangeT = attrib(type=AstType)
+    def __str__(s) -> str: return "[{}]{}".format(str(s.domainT), str(s.rangeT))
 
 # Expressions
 class AstExpr(AstNode): pass
 class AstFalse(AstExpr):
-    def __init__(s) -> None:  AstExpr.__init__(s)
     def __str__(s) -> str: return "false"
 
 class AstTrue(AstExpr):
-    def __init__(s) -> None:  AstExpr.__init__(s)
     def __str__(s) -> str: return "true"
 
+@attrs
 class AstNumber(AstExpr):
-    def __init__(s, num: int) -> None:   AstExpr.__init__(s,num)
+    num = attrib(type=int)
     def __str__(s) -> str: return str(s.num)
 
+@attrs
 class AstId(AstExpr):
-    def __init__(s, name: str) -> None:  AstExpr.__init__(s, name)
-    def __str__(s) -> str: return str(s.name)
+    name = attrib(type=str)
+    def __str__(s) -> str: return s.name
 
+@attrs
 class AstMapIndex(AstExpr):
-    def __init__(s, map: AstExpr, index: AstExpr) -> None:  AstExpr.__init__(s, map, index)
+    map = attrib(type=AstExpr)
+    index = attrib(type=AstExpr)
     def __str__(s) -> str: return "{}[{}]".format(str(s.map), str(s.index))
 
+@attrs
 class AstMapUpdate(AstExpr):
-    def __init__(s, map: AstExpr, index: AstExpr, newVal: AstExpr) -> None:  AstExpr.__init__(s, map, index, newVal)
+    map = attrib(type=AstExpr)
+    index = attrib(type=AstExpr)
+    newVal = attrib(type=AstExpr)
     def __str__(s) -> str: return "{}[{}:={}]".format(str(s.map), str(s.index), str(s.newVal))
 
+@attrs
 class AstUnExpr(AstExpr):
-    def __init__(s, op: str, expr: AstExpr) -> None:  AstExpr.__init__(s, op, expr)
+    op = attrib(type=str)
+    expr = attrib(type=AstExpr)
     def __str__(s) -> str: return s.op + str(s.expr)
 
+@attrs
 class AstBinExpr(AstExpr):
-    def __init__(s, lhs: AstExpr, op: str, rhs: AstExpr) -> None:  AstExpr.__init__(s, lhs, op, rhs)
+    lhs = attrib(type=AstExpr)
+    op = attrib(type=str)
+    rhs = attrib(type=AstExpr)
     def __str__(s) -> str:
         return "(" + str(s.lhs) + " " + str(s.op) + " " + str(s.rhs) + ")"
 
+@attrs
 class AstBinding(AstNode):
-    def __init__(s, names: Iterable[str], typ: AstType) -> None:  AstNode.__init__(s, tuple(names), typ)
+    names = attrib(type=List[str])
+    typ = attrib(type=AstType)
     def __str__(s) -> str: return ",".join(map(str, s.names)) + " : " + str(s.typ)
 
 
+@attrs
 class AstForallExpr(AstExpr):
-    def __init__(s, bindings: List[AstBinding], expr: AstExpr) -> None:  AstExpr.__init__(s, tuple(bindings), expr)
+    bindings = attrib(type=List[AstBinding])
+    expr = attrib(type=AstExpr)
     def __str__(s) -> str:
-        return "(forall " + ",".join([str(x) for x in s.bindings]) + " :: " + \
+        return "(forall " + ",".join(map(str, s.bindings)) + " :: " + \
                str(s.expr) + ")"
 
+@attrs
 class AstFuncExpr(AstExpr):
-    def __init__(s, funcName: AstId, *ops: AstExpr) -> None:  AstExpr.__init__(s, funcName, *ops)
+    funcName = attrib(type=AstId)
+    ops = attrib(type=List[AstExpr])
     def __str__(s) -> str:
         return str(s.funcName) + "(" + ",".join(map(str, s.ops)) +  ")"
 
-def _force_expr(s: AstNode) -> AstExpr:
-    assert isinstance(s, AstExpr)
-    return s
-
-# Statements
 class AstStmt(AstNode): pass
 
+@attrs
 class AstLabel(AstNode):
-    def __init__(s, label: str, stmt: AstStmt) -> None:  AstNode.__init__(s, label, stmt)
+    label = attrib(type=str)
+    stmt = attrib(type=AstStmt)
     def __str__(s) -> str: return str(s.label) + " : " + str(s.stmt)
 
-AstStmt_T = Union[AstStmt, AstLabel]
-def _force_stmt(s: AstNode) -> AstStmt:
-    assert isinstance(s, AstStmt)
-    return s
-
+@attrs
 class AstOneExprStmt(AstStmt):
-    def __init__(s, expr: AstExpr) -> None:  AstStmt.__init__(s, expr)
+    expr = attrib(type=AstExpr)
 
 class AstAssert(AstOneExprStmt):
-    def __str__(s) -> str: return "assert (" + str(s.expr) + ");";
+    def __str__(s) -> str: return "assert (" + str(s.expr) + ");"
 
 class AstAssume(AstOneExprStmt):
-    def __str__(s) -> str: return "assume (" + str(s.expr) + ");";
+    def __str__(s) -> str: return "assume (" + str(s.expr) + ");"
 
+@attrs
 class AstAssignment(AstStmt):
-    def __init__(s, lhs: Union[AstId, AstMapIndex], rhs: AstExpr) -> None:  AstNode.__init__(s, lhs, rhs)
+    lhs = attrib(type=Union[AstId, AstMapIndex])
+    rhs = attrib(type=AstExpr)
     def __str__(s) -> str: return str(s.lhs) + " := " + str(s.rhs) + ";"
 
+@attrs
 class AstHavoc(AstStmt):
-    #TODO: Should be more precise here: Iterable[AstId]
-    def __init__(s, ids: Iterable[AstNode]) -> None:  AstStmt.__init__(s, ids)
+    ids = attrib(type=List[AstId])
     def __str__(s) -> str: return "havoc " + ",".join(map(str, s.ids)) + ";"
 
 # Returns is for now without argument
 class AstReturn(AstStmt):
-    def __init__(s) -> None:  AstStmt.__init__(s)
     def __str__(s) -> str: return "return ;"
 
+@attrs
 class AstGoto(AstStmt):
-    #TODO: Should be more precise here: Iterable[AstId]
-    def __init__(s, labels: Iterable[AstNode]) -> None:  AstStmt.__init__(s, labels)
+    labels = attrib(type=List[AstId])
     def __str__(s) -> str: return "goto " + ",".join(map(str, s.labels)) + ";"
 
 # Functions
+@attrs
 class AstBody(AstNode):
-    def __init__(s, bindings: Iterable[AstBinding], stmts: Iterable[AstStmt_T]) -> None:   AstNode.__init__(s, bindings, stmts)
+    bindings = attrib(type = List[AstBinding])
+    stmts = attrib(type = List[AstStmt])
     def __str__(s) -> str:
         return "{\n" + "\n".join(["var " + str(x) + ";" for x in s.bindings]) +\
                 "\n" +\
                 "\n".join([str(x) for x in s.stmts]) + \
                 "\n}"
 
-class AstImplementation(AstNode):
-    def __init__(s, name: str, signature: Any, body: AstBody) -> None:
-        AstNode.__init__(s, name, signature, body)
-    def __str__(s) -> str:
-        return "implementation " + s.name + " " + str(s.signature) + str(s.body)
+class AstDecl(AstNode): pass
 
-AstDecl_T = AstImplementation
+@attrs
+class AstImplementation(AstDecl):
+    name = attrib(type = str)
+    parameters = attrib(type = List[AstBinding])
+    returns = attrib(type = List[AstBinding])
+    body = attrib(type = AstBody)
+    def __str__(s) -> str:
+        return "implementation " + s.name + " (" + str(s.parameters) + ") returns (" + str(s.returns) + ")" + str(s.body)
 
 # Programs
+@attrs
 class AstProgram(AstNode):
-    def __init__(s, decls: Iterable[AstDecl_T]) -> None: AstNode.__init__(s, decls)
+    decls = attrib(type=List[AstDecl])
     def __str__(s) -> str: return "\n".join(map(str, s.decls))
 
 def _mkBinExp(lhs: Any, op: Any, rhs: Any) -> AstBinExpr:
@@ -204,10 +159,29 @@ def _mkBinExp(lhs: Any, op: Any, rhs: Any) -> AstBinExpr:
          isinstance(op, str)
   return AstBinExpr(lhs, op, rhs)
 
+T=TypeVar("T")
 def listify(p: "PR[T]") -> "List[T]":
     if (len(p) == 0):
         return [] 
     return [x for x in p]
+
+ReplMap_T = Dict[AstNode, AstNode]
+def replace(ast: Any, m: ReplMap_T) -> AstNode:
+    if (not isinstance(ast, AstNode)):
+        return ast
+    else:
+        if (ast in m):
+            return m[ast]
+        else:
+            return ast.__class__(*[replace(val,m) for (field, val) in ast.__dict__])
+
+def reduce_nodes(node: AstNode, cb: Callable[[AstNode, List[T]], T]) -> T:
+    return cb(node,
+              [ reduce_nodes(val, cb)
+                  for val in node.__dict__.values() if isinstance(val, AstNode) ])
+
+def _toIds(toks: PR[Any]) -> List[AstId]:
+    return [ccast(x, AstId) for x in toks]
 
 class AstBuilder(BoogieParser[AstNode]):
   def onAtom(s, prod: PE, st: str, loc: int, toks: PR) -> Iterable[AstNode]:
@@ -231,7 +205,7 @@ class AstBuilder(BoogieParser[AstNode]):
     if (len(toks) == 3):
       return [ _mkBinExp(*toks) ]
     else:
-      assert(len(toks) > 3);
+      assert(len(toks) > 3)
       base = _mkBinExp(*toks[:3])
       rest = [ [toks[3+2*k], toks[3+2*k+1]] for k in range(int((len(toks)-3)/2)) ]
       return [ reduce(lambda acc,el:  _mkBinExp(acc, el[0], el[1]), \
@@ -242,7 +216,7 @@ class AstBuilder(BoogieParser[AstNode]):
     raise Exception("NYI")
 
   def onNABinOp(s, prod: PE, st: str, loc: int, toks: PR) -> Iterable[AstNode]:
-    assert (len(toks) == 3);
+    assert (len(toks) == 3)
     return [ _mkBinExp(*toks) ]
 
   def onBinding(s, prod: PE, st: str, loc: int, toks: PR) -> Iterable[AstNode]:
@@ -261,7 +235,7 @@ class AstBuilder(BoogieParser[AstNode]):
     return [ AstReturn() ]
   def onGoto(s, prod: PE, st: str, loc: int, toks: PR) -> Iterable[AstNode]:
     assert(len(toks) > 0)
-    return [ AstGoto(toks) ]
+    return [ AstGoto(_toIds(toks)) ]
   def onAssignment(s, prod: PE, st: str, loc: int, toks: PR) -> Iterable[AstNode]:
     assert (len(toks) == 2)
     assert (len(toks[0]) == 1)
@@ -269,12 +243,9 @@ class AstBuilder(BoogieParser[AstNode]):
     return [ AstAssignment(toks[0][0], toks[1][0]) ]
   def onHavoc(s, prod: PE, st: str, loc: int, toks: PR) -> Iterable[AstNode]:
     assert (len(toks) > 0)
-    return [ AstHavoc(toks) ]
+    return [ AstHavoc(_toIds(toks)) ]
   def onProgram(s, prod: PE, st: str, loc: int, toks: PR) -> Iterable[AstNode]:
-    decls = [] # type: List[AstDecl_T] 
-    for d in toks:
-        assert isinstance(d, AstDecl_T)
-        decls.append(d)
+    decls = [ccast(x, AstDecl) for x in toks] # type: List[AstDecl] 
     return [ AstProgram(decls) ]
   def onLocalVarDecl(s, prod: PE, st: str, loc: int, toks: PR) -> Iterable[AstNode]:
     assert len(toks) == 1 and isinstance(toks[0], AstBinding)
@@ -283,9 +254,9 @@ class AstBuilder(BoogieParser[AstNode]):
     # Currently only handle ints
     assert len(toks) == 1
     if toks[0] == 'int':
-      return [ AstIntType() ];
+      return [ AstIntType() ]
     elif toks[0] == 'bool':
-      return [ AstBoolType() ];
+      return [ AstBoolType() ]
     else:
       raise Exception("NYI type: {}".format(toks[0]))
   def onMapType(s, prod: PE, st: str, loc: int, toks: PR) -> Iterable[AstNode]:
@@ -296,10 +267,10 @@ class AstBuilder(BoogieParser[AstNode]):
     assert isinstance(domainT, AstType) and isinstance(rangeT, AstType)
     return [ AstMapType(domainT, rangeT) ]
   def onType(s, prod: PE, st: str, loc: int, toks: PR) -> Iterable[AstNode]:
-    assert len(toks) == 1 and isinstance(toks[0], AstType)
-    return [ toks[0] ];
+    assert len(toks) == 1
+    return [ ccast(toks[0], AstType) ]
   def onBody(s, prod: PE, st: str, loc: int, toks: PR) -> Iterable[AstNode]:
-    assert len(toks) == 2;
+    assert len(toks) == 2
     return [ AstBody(listify(toks[0]), listify(toks[1])) ]
   def onImplementationDecl(s, prod: PE, st: str, loc: int, toks: PR) -> Iterable[AstNode]:
     attrs = toks[0]
@@ -311,7 +282,7 @@ class AstBuilder(BoogieParser[AstNode]):
     # For now ignore anything other than the argument list
     assert len(type_args) == 0, "NYI: Imeplementation type args: {}".format(type_args)
     body = toks[3][0]  # type: AstBody
-    return [ AstImplementation(name, (listify(parameters), listify(returns)), body) ]
+    return [ AstImplementation(name, listify(parameters), listify(returns), body) ]
   def onLabeledStatement(s, prod: PE, st: str, loc: int, toks: PR) -> Iterable[AstNode]:
     label = str(toks[0])
     stmt = toks[1]
@@ -338,28 +309,23 @@ class AstBuilder(BoogieParser[AstNode]):
         bindings.append(node)
     expr = toks[2]
     assert quantifier == "forall", "Existential quantification NYI"
-    assert isinstance(expr, AstExpr)
-    return [AstForallExpr(bindings, expr)]
+    return [AstForallExpr(bindings, ccast(expr, AstExpr))]
 
-astBuilder = AstBuilder();
+astBuilder = AstBuilder()
 
 def parseExprAst(s: str) -> AstExpr:
   try:
-    r = astBuilder.parseExpr(s);
-    assert isinstance(r, AstExpr)
-    return r
+    return ccast(astBuilder.parseExpr(s), AstExpr)
   except:
-    print("Failed parsing");
-    raise;
+    print("Failed parsing")
+    raise
 
 def parseAst(s: str) -> AstProgram:
   try:
-    r = astBuilder.parseProgram(s);
-    assert isinstance(r, AstProgram)
-    return r
+    return ccast(astBuilder.parseProgram(s), AstProgram)
   except:
-    print("Failed parsing");
-    raise;
+    print("Failed parsing")
+    raise
 
 def expr_read(ast: AstNode) -> Set[str]:
     if isinstance(ast, AstId):
@@ -382,7 +348,7 @@ def expr_read(ast: AstNode) -> Set[str]:
     else:
         raise Exception("Unknown expression type " + str(ast))
 
-def stmt_read(ast: AstStmt_T) -> Set[str]:
+def stmt_read(ast: AstStmt) -> Set[str]:
     if isinstance(ast, AstLabel):
         ast = ast.stmt
 
@@ -397,7 +363,7 @@ def stmt_read(ast: AstStmt_T) -> Set[str]:
     else:
         raise Exception("Unknown statement: " + str(ast))
 
-def stmt_changed(ast: AstStmt_T) -> Set[str]:
+def stmt_changed(ast: AstStmt) -> Set[str]:
     if isinstance(ast, AstLabel):
         ast = ast.stmt
 
@@ -438,9 +404,9 @@ def normalize(ast: AstNode) -> AstNode:
     return AstBinExpr(ast.lhs.expr, "==>", ast.rhs)
 
   if (isinstance(ast, AstNode)):
-    return ast.__class__(*tuple(map(normalize, ast._children)))
+    return ast.__class__(*tuple(map(normalize, ast.__dict__.values())))
   else:
-    return ast;
+    return ast
 
 def ast_constants(n: AstNode) -> Set[int]:
   def cb(node: AstNode, children: Iterable[Set[int]]) -> Set[int]:
@@ -448,7 +414,7 @@ def ast_constants(n: AstNode) -> Set[int]:
       return set([node.num])
     else:
       return reduce(lambda x,y: x.union(y), children, set())
-  return reduce_nodes(n, cb);
+  return reduce_nodes(n, cb)
 
 
 def ast_boolean_exprs(n: AstNode) -> Set[AstExpr]:

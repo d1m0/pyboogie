@@ -1,6 +1,6 @@
 from .bb import BB, Function
 from copy import copy
-from .util import unique
+from .util import unique, ccast
 from .ast import AstAssert, AstAssume, AstHavoc, AstAssignment, AstGoto, \
   AstReturn, AstUnExpr, AstBinExpr, AstNumber, AstId, AstTrue, AstFalse, \
   AstExpr, AstMapIndex, ast_and, AstForallExpr, AstBinding, AstIntType
@@ -64,7 +64,7 @@ def store_to_expr(s: Store, suff:str ="") -> AstExpr:
             if val._default_case is not None:
               key = AstId("_key_")
               not_explicit = ast_and([AstBinExpr(key, "!=", x) for x in explicit_vals])
-              exprs.append(AstForallExpr([AstBinding(key, AstIntType())],
+              exprs.append(AstForallExpr([AstBinding(["_key_"], AstIntType())],
                                      AstBinExpr(not_explicit, "==>",
                                                 AstBinExpr(AstMapIndex(AstId(var + suff), key), "==", val._default_case))))
         else:
@@ -241,7 +241,7 @@ def interp_one(state: State, rand: RandF) -> Iterable[State]:
     elif isinstance(stmt, AstAssignment):
       v = eval_quick(stmt.rhs, store)
       store = copy(store)
-      store[stmt.lhs.name] = v
+      store[ccast(stmt.lhs, AstId).name] = v
     else:
       assert False, "Can't handle statement {}".format(stmt)
 

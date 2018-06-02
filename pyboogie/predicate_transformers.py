@@ -1,6 +1,7 @@
 from .ast import AstLabel, AstAssignment, AstAssert, AstAssume, \
-        expr_read, AstStmt
+        expr_read, AstStmt, AstId
 from .z3_embed import expr_to_z3, And, Implies, ids, TypeEnv_T, _force_expr
+from .util import ccast
 from collections import namedtuple
 import z3
 from typing import Iterable, Reversible
@@ -13,7 +14,7 @@ def wp_stmt(stmt: AstStmt, pred: z3.ExprRef, typeEnv: TypeEnv_T) -> z3.ExprRef:
         assignee = str(stmt.lhs)
         # Should already be SSA-ed
         assert(assignee not in expr_read(stmt.rhs))
-        lhs = typeEnv[stmt.lhs](assignee)
+        lhs = typeEnv[ccast(stmt.lhs, AstId).name](assignee)
         rhs = expr_to_z3(stmt.rhs, typeEnv)
         return _force_expr(z3.substitute(pred, (lhs, rhs)))
     elif (isinstance(stmt, AstAssert)):
