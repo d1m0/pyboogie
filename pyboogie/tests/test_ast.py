@@ -2,6 +2,7 @@ from unittest import TestCase
 from ..grammar import BoogieParser
 from ..ast import parseAst, parseExprAst, AstProgram, AstImplementation,\
     AstBody, AstBinding, AstIntType, AstAssignment, AstId, AstBinExpr, AstNumber, replace
+from pyparsing import ParseException
 
 class TestAst(TestCase):
     testProgs = [
@@ -36,6 +37,22 @@ class TestAst(TestCase):
         ),
 
     ]
+    def test_bad_parse(self):
+        """ Make sure parseAst doesn't fail silently
+        """
+        badProgs = [
+            "foo",
+            "implementation main ()",
+            "implementation main () {",
+            "implementation main () returns () {}",
+            """implementation main () returns () {
+                a:= 1
+            }""",
+        ]
+        for text in badProgs:
+            with self.assertRaises(ParseException):
+                parseAst("badProgs")
+
     def test_parse(self):
         """ For each pair of text S and expected parse tree T in
             TestAst.testProgs check parseAst(S) == T
@@ -57,8 +74,10 @@ class TestAst(TestCase):
                 raise
 
     def test_replace(self):
+        "Check that replace() function works correctly"
         tests = [
             ("x+y", {AstId('x'): AstNumber(42)}, "(42+y)"),
+            ("x+y", {AstId('z'): AstNumber(42)}, "(x+y)"),
             ("x+(y+z)", {AstId('y'): AstNumber(42), parseExprAst('y+z'): AstNumber(43)}, "(x+43)"),
         ]
         for (expr, replM, expected) in tests:
