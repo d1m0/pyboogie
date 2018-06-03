@@ -20,7 +20,7 @@ class AstIntType(AstType):
 class AstBoolType(AstType):
     def __str__(s) -> str: return "bool"
 
-@attrs
+@attrs(frozen=True)
 class AstMapType(AstType):
     domainT = attrib(type=AstType)
     rangeT = attrib(type=AstType)
@@ -34,36 +34,36 @@ class AstFalse(AstExpr):
 class AstTrue(AstExpr):
     def __str__(s) -> str: return "true"
 
-@attrs
+@attrs(frozen=True)
 class AstNumber(AstExpr):
     num = attrib(type=int)
     def __str__(s) -> str: return str(s.num)
 
-@attrs
+@attrs(frozen=True)
 class AstId(AstExpr):
     name = attrib(type=str)
     def __str__(s) -> str: return s.name
 
-@attrs
+@attrs(frozen=True)
 class AstMapIndex(AstExpr):
     map = attrib(type=AstExpr)
     index = attrib(type=AstExpr)
     def __str__(s) -> str: return "{}[{}]".format(str(s.map), str(s.index))
 
-@attrs
+@attrs(frozen=True)
 class AstMapUpdate(AstExpr):
     map = attrib(type=AstExpr)
     index = attrib(type=AstExpr)
     newVal = attrib(type=AstExpr)
     def __str__(s) -> str: return "{}[{}:={}]".format(str(s.map), str(s.index), str(s.newVal))
 
-@attrs
+@attrs(frozen=True)
 class AstUnExpr(AstExpr):
     op = attrib(type=str)
     expr = attrib(type=AstExpr)
     def __str__(s) -> str: return s.op + str(s.expr)
 
-@attrs
+@attrs(frozen=True)
 class AstBinExpr(AstExpr):
     lhs = attrib(type=AstExpr)
     op = attrib(type=str)
@@ -71,14 +71,14 @@ class AstBinExpr(AstExpr):
     def __str__(s) -> str:
         return "(" + str(s.lhs) + " " + str(s.op) + " " + str(s.rhs) + ")"
 
-@attrs
+@attrs(frozen=True)
 class AstBinding(AstNode):
     names = attrib(type=List[str])
     typ = attrib(type=AstType)
     def __str__(s) -> str: return ",".join(map(str, s.names)) + " : " + str(s.typ)
 
 
-@attrs
+@attrs(frozen=True)
 class AstForallExpr(AstExpr):
     bindings = attrib(type=List[AstBinding])
     expr = attrib(type=AstExpr)
@@ -86,7 +86,7 @@ class AstForallExpr(AstExpr):
         return "(forall " + ",".join(map(str, s.bindings)) + " :: " + \
                str(s.expr) + ")"
 
-@attrs
+@attrs(frozen=True)
 class AstFuncExpr(AstExpr):
     funcName = attrib(type=AstId)
     ops = attrib(type=List[AstExpr])
@@ -95,13 +95,13 @@ class AstFuncExpr(AstExpr):
 
 class AstStmt(AstNode): pass
 
-@attrs
+@attrs(frozen=True)
 class AstLabel(AstNode):
     label = attrib(type=str)
     stmt = attrib(type=AstStmt)
     def __str__(s) -> str: return str(s.label) + " : " + str(s.stmt)
 
-@attrs
+@attrs(frozen=True)
 class AstOneExprStmt(AstStmt):
     expr = attrib(type=AstExpr)
 
@@ -111,13 +111,13 @@ class AstAssert(AstOneExprStmt):
 class AstAssume(AstOneExprStmt):
     def __str__(s) -> str: return "assume (" + str(s.expr) + ");"
 
-@attrs
+@attrs(frozen=True)
 class AstAssignment(AstStmt):
     lhs = attrib(type=Union[AstId, AstMapIndex])
     rhs = attrib(type=AstExpr)
     def __str__(s) -> str: return str(s.lhs) + " := " + str(s.rhs) + ";"
 
-@attrs
+@attrs(frozen=True)
 class AstHavoc(AstStmt):
     ids = attrib(type=List[AstId])
     def __str__(s) -> str: return "havoc " + ",".join(map(str, s.ids)) + ";"
@@ -126,13 +126,13 @@ class AstHavoc(AstStmt):
 class AstReturn(AstStmt):
     def __str__(s) -> str: return "return ;"
 
-@attrs
+@attrs(frozen=True)
 class AstGoto(AstStmt):
     labels = attrib(type=List[AstId])
     def __str__(s) -> str: return "goto " + ",".join(map(str, s.labels)) + ";"
 
 # Functions
-@attrs
+@attrs(frozen=True)
 class AstBody(AstNode):
     bindings = attrib(type = List[AstBinding])
     stmts = attrib(type = List[AstStmt])
@@ -144,7 +144,7 @@ class AstBody(AstNode):
 
 class AstDecl(AstNode): pass
 
-@attrs
+@attrs(frozen=True)
 class AstImplementation(AstDecl):
     name = attrib(type = str)
     parameters = attrib(type = List[AstBinding])
@@ -157,7 +157,7 @@ class AstImplementation(AstDecl):
             str(s.body)
 
 # Programs
-@attrs
+@attrs(frozen=True)
 class AstProgram(AstNode):
     decls = attrib(type=List[AstDecl])
     def __str__(s) -> str: return "\n".join(map(str, s.decls))
@@ -181,7 +181,7 @@ def replace(ast: Any, m: ReplMap_T) -> AstNode:
         if (ast in m):
             return m[ast]
         else:
-            return ast.__class__(*[replace(val,m) for (field, val) in ast.__dict__])
+            return ast.__class__(*[replace(val,m) for (field, val) in ast.__dict__.items()])
 
 def reduce_nodes(node: AstNode, cb: Callable[[AstNode, List[T]], T]) -> T:
     return cb(node,

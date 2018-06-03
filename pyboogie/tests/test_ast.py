@@ -1,7 +1,7 @@
 from unittest import TestCase
 from ..grammar import BoogieParser
 from ..ast import parseAst, parseExprAst, AstProgram, AstImplementation,\
-    AstBody, AstBinding, AstIntType, AstAssignment, AstId, AstBinExpr, AstNumber
+    AstBody, AstBinding, AstIntType, AstAssignment, AstId, AstBinExpr, AstNumber, replace
 
 class TestAst(TestCase):
     testProgs = [
@@ -55,3 +55,15 @@ class TestAst(TestCase):
             except:
                 print ("Failed parsing {}".format(str(expected)))
                 raise
+
+    def test_replace(self):
+        tests = [
+            ("x+y", {AstId('x'): AstNumber(42)}, "(42+y)"),
+            ("x+(y+z)", {AstId('y'): AstNumber(42), parseExprAst('y+z'): AstNumber(43)}, "(x+43)"),
+        ]
+        for (expr, replM, expected) in tests:
+            origExpr = parseExprAst(expr) if (isinstance(expr, str)) else expr
+            replacedExp = replace(origExpr, replM)
+            expectedExpr = parseExprAst(expected) if (isinstance(expected, str)) else expected
+            assert (replacedExp == expectedExpr),\
+                "Bad replace: Expected {} got {}".format(expected, replacedExp)
