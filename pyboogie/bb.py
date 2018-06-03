@@ -7,7 +7,7 @@ from .util import unique, get_uid, ccast
 from typing import Dict, List, Iterable, Tuple, Iterator, Any, Set, Optional
 
 Label_T = str
-Bindings_T = Iterable[Tuple[str, AstType]]
+Bindings_T = List[Tuple[str, AstType]]
 
 class BB(List[AstStmt]):
     def __init__(self, label: Label_T, predecessors: Iterable["BB"], stmts: Iterable[AstStmt], successors: Iterable["BB"], internal: bool = False) -> None:
@@ -128,10 +128,17 @@ class Function(object):
         successors = {}  # type: Dict[str, List[str]]
         for stmt in fun.body.stmts:
             # A BB starts with a labeled statment
-            if (isinstance(stmt, AstLabel)):
+            while (isinstance(stmt, AstLabel)):
+                oldLbl = curLbl
                 curLbl = str(stmt.label)
                 bbs[curLbl] = BB(curLbl, [], [], [])
+                if (oldLbl is not None):
+                    bbs[oldLbl].addSuccessor(bbs[curLbl])
                 stmt = stmt.stmt
+
+            if (stmt is None):
+                assert curLbl != None and len(bbs[curLbl]) == 0 # Empty BB at end
+                continue
 
             if (isinstance(stmt, AstAssert) or
                 isinstance(stmt, AstAssume) or
@@ -297,14 +304,14 @@ class Function(object):
 
     def pp(self) -> str:
         def pp_bindings(b: Bindings_T) -> str:
-            return ",".join("{}:{}".format(str(id), str(typ)) for (id, typ) in self.parameters)
+            return ",".join("{}:{}".format(str(id), str(typ)) for (id, typ) in b)
 
         def pp_locals(b: Bindings_T) -> str:
-            return "\n".join("    var {}: {};".format(str(id), str(typ)) for (id, typ) in self.parameters)
+            return "\n".join("    var {}: {};".format(str(id), str(typ)) for (id, typ) in b)
 
-        return "implementation {}({}) returns ({})\n{{\n{}\n{}\n}}".format(
+        return "implementation {}({}){}\n{{\n{}\n{}\n}}".format(
             self.name,
             pp_bindings(self.parameters),
-            pp_bindings(self.returns),
+            (" returns({})".format(pp_bindings(self.returns)) if len(self.returns) > 0 else ""),
             pp_locals(self.locals),
             "\n\n".join(bb.pp() for bb in self._bbs.values()))

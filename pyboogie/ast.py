@@ -293,10 +293,13 @@ class AstBuilder(BoogieParser[AstNode]):
     return [ AstImplementation(name, listify(parameters), listify(returns), body) ]
   def onLabeledStatement(s, prod: PE, st: str, loc: int, toks: PR) -> Iterable[AstNode]:
     label = str(toks[0])
-    stmt = toks[1]
-    assert isinstance(stmt, AstStmt) or isinstance(stmt, AstLabel), "Unexpected {}".format(stmt)
-    # TODO: Mypy can't figure out that stmt is of the right type due to above assert
-    return [AstLabel(label, stmt)]  #type: ignore
+    if (len(toks) == 1):
+        # Empty label
+        return [AstLabel(label, None)]  #type: ignore
+    else:
+        stmt = toks[1]
+        assert isinstance(stmt, AstStmt) or isinstance(stmt, AstLabel), "Unexpected {}".format(stmt)
+        return [AstLabel(label, stmt)]  #type: ignore
   def onMapIndex(s, prod: PE, st: str, loc: int, toks: PR) -> Iterable[AstNode]:
     mapE = toks[0]
     indexE = toks[1]

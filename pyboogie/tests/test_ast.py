@@ -1,3 +1,7 @@
+""" 
+Tests for basing Boogie parsing and AST building.
+These tests focus on the core subset of boogie supported.
+"""
 from unittest import TestCase
 from ..grammar import BoogieParser
 from ..ast import parseAst, parseExprAst, AstProgram, AstImplementation,\

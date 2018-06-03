@@ -321,14 +321,16 @@ class BoogieParser(Generic[T]):
 
     s.LStmt = F()
     s.LabeledStatement = s.Label + S(s.COLN) + s.LStmt # type: ParserElement[T]
-    s.LStmt << (s.Stmt | s.LabeledStatement) #pylint: disable=pointless-statement
-    s.LEmpty = F()
-    s.LEmpty <<(s.Id + s.COLN + O(s.LEmpty)) #pylint: disable=expression-not-assigned
+    s.LEmpty = (s.Label + S(s.COLN) ) 
+    s.LStmt << (s.Stmt | s.LabeledStatement | s.LEmpty) #pylint: disable=pointless-statement
     s.LabeledStatement.setParseAction(
       lambda st, loc, toks: s.onLabeledStatement(s.LabeledStatement,
                                                  st, loc, toks))
+    s.LEmpty.setParseAction(
+      lambda st, loc, toks: s.onLabeledStatement(s.LEmpty,
+                                                 st, loc, toks))
 
-    s.StmtList << (ZoM(s.LStmt) + O(s.LEmpty)) #pylint: disable=expression-not-assigned
+    s.StmtList << (ZoM(s.LStmt)) #pylint: disable=expression-not-assigned
 
 
     s.Body = S(s.LBRAC) + G(ZoM(s.LocalVarDecl)) + G(s.StmtList) + S(s.RBRAC) # type: ParserElement[T]
