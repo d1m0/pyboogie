@@ -1,10 +1,11 @@
 from .ast import parseAst, AstImplementation, AstLabel, \
         AstAssert, AstAssume, AstHavoc, AstAssignment, AstGoto, \
         AstReturn, AstNode, AstStmt, AstType, AstProgram, AstMapIndex,\
-        AstMapUpdate, AstId
+        AstMapUpdate, AstId, parseType, parseStmt
 from collections import namedtuple
 from .util import unique, get_uid, ccast
 from typing import Dict, List, Iterable, Tuple, Iterator, Any, Set, Optional
+from json import loads
 
 Label_T = str
 Bindings_T = List[Tuple[str, AstType]]
@@ -60,6 +61,15 @@ class BB(List[AstStmt]):
                 [str(stmt) for stmt in self],
                 [bb.label for bb in self._successors]]
 
+    @staticmethod
+    def from_json(arg: Any) -> Tuple[List[str], "BB", List[str]]:
+        raw = loads(arg) if isinstance(arg, str) else arg
+        label = raw[0] # type: str
+        predLabels = raw[1] # type: List[str]
+        stmts = [parseStmt(s) for s in raw[2]] # type: List[AstStmt]
+        succLabels = raw[3] # type: List[str]
+        return (predLabels, BB(label, [], stmts, []), succLabels)
+
     def is_gcl(self) -> bool:
         """ A BB is in GCL form if all the assumes come first in the statement
         list, and all of the asserts come last. """
@@ -71,6 +81,45 @@ class BB(List[AstStmt]):
 
         stmt_weights = [stmt_weight(stmt) for stmt in self]
         return stmt_weights == sorted(stmt_weights)
+
+    def is_isomorphic(self, other: "BB", mapping: "Optional[Dict[BB, BB]]" = None) -> bool:
+        """ Check if the CFG rooted at self is isomorphic to the CFG rooted at other.
+            This involves checking that:
+                1) self and other have the same statements
+                2) there is a bijection F from self.successors() onto other.successors() such that
+                    for all n \in self.successors(), n and F(n) are also isomorphic
+
+            If return is true, mapping at the end holds the mapping from self's cfg to other's.
+        """
+        if (mapping is None):
+            mapping = {}
+
+        if (self in mapping):
+            return mapping[self] == other
+
+        mapping[self] = other
+
+        # Check basic shape of BBs equal
+        if (self.label != other.label or
+            len(self._predecessors) != len(other._predecessors) or
+            len(self) != len(other) or
+            len(self._successors) != len(other._successors)):
+            return False
+
+        # Check statements match up
+        for (aStmt, bStmt) in zip(self, other):
+            if (aStmt != bStmt):
+                return False
+
+        # Since we require BB labels ot be unique in a function, can use them to compute
+        # the only possible permutation of successors
+        otherSuccs = { x.label: x   for  x in other.successors() } # type: Dict[str, BB]
+        for succBB in self.successors():
+            if (succBB.label not in otherSuccs or
+                not succBB.is_isomorphic(otherSuccs[succBB.label], mapping)):
+                return False
+
+        return True
 
     def pp(self) -> str:
         goto_str = "" if len(self.successors()) == 0 else \
@@ -133,7 +182,8 @@ class Function(object):
                 curLbl = str(stmt.label)
                 bbs[curLbl] = BB(curLbl, [], [], [])
                 if (oldLbl is not None):
-                    bbs[oldLbl].addSuccessor(bbs[curLbl])
+                    assert (oldLbl not in successors)
+                    successors[oldLbl] = [curLbl]
                 stmt = stmt.stmt
 
             if (stmt is None):
@@ -229,6 +279,9 @@ class Function(object):
                 bb[stmt_idx] = AstAssignment(ccast(lhs, AstId), rhs)
 
     def to_json(self) -> Any:
+        """ Convert self to a JSON-like python object. If you want a string
+            just call json.dumps() on return.
+        """
         return [
                 self.name,
                 [(name, str(typ)) for (name, typ) in self.parameters],
@@ -236,6 +289,40 @@ class Function(object):
                 [(name, str(typ)) for (name, typ) in self.returns],
                 [bb.to_json() for bb in self._bbs.values()],
         ]
+
+    @staticmethod
+    def from_json(arg: Any) -> "Function":
+        """ Given a JSON string, or a pythonified JSON object, returned by f.to_json() for some Function f,
+            re-build f
+        """
+        raw = loads(arg) if isinstance(arg, str) else arg
+        name = raw[0]
+        parameters = [(x[0], parseType(x[1])) for x in raw[1]]
+        locals = [(x[0], parseType(x[1])) for x in raw[2]]
+        returns = [(x[0], parseType(x[1])) for x in raw[3]]
+        # First parse out BBs, and pred/succ labels
+        bbs = []
+        for bbJson in raw[4]:
+            bbInfo = BB.from_json(bbJson)
+            bbs.append(bbInfo)
+
+        # Build map form labels to bbs
+        mapping = {bb.label: bb for (_, bb, _) in bbs } # type: Dict[str, BB]
+
+        # Add edges between bbs
+        for (_, bb, succLabels) in bbs:
+            for succ in succLabels:
+                bb.addSuccessor(mapping[succ])
+
+        return Function(name, [bb for (_,bb,_) in bbs], parameters, locals, returns)
+
+    def eq(self, other: "Function") -> bool:
+        """ Check structural equality between self and other """
+        return (self.name == other.name and
+               self.parameters == other.parameters and
+               self.locals == other.locals and
+               self.returns == other.returns and
+               self.entry().is_isomorphic(other.entry()))
 
     def is_gcl(self) -> bool:
         return all(bb.is_gcl() for bb in self._bbs.values())

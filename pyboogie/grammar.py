@@ -366,5 +366,14 @@ class BoogieParser(Generic[T]):
   def parseExpr(s, st:str) -> T:
     return (s.Expr + StringEnd()).parseString(st)[0]
 
+  def parseStmt(s, st:str) -> T:
+    return (s.LStmt + StringEnd()).parseString(st)[0]
+
   def parseProgram(s, st:str) -> T:
     return (s.Program + StringEnd()).parseString(st)[0]
+
+  def parseBinding(s, st:str) -> Iterable[T]:
+    return (s.IdsType + StringEnd()).parseString(st)
+
+  def parseType(s, st:str) -> T:
+    return (s.Type + StringEnd()).parseString(st)[0]

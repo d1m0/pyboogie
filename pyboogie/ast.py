@@ -331,9 +331,30 @@ def parseExprAst(s: str) -> AstExpr:
     print("Failed parsing")
     raise
 
+def parseStmt(s: str) -> AstStmt:
+  try:
+    return ccast(astBuilder.parseStmt(s), AstStmt)
+  except:
+    print("Failed parsing")
+    raise
+
 def parseAst(s: str) -> AstProgram:
   try:
     return ccast(astBuilder.parseProgram(s), AstProgram)
+  except:
+    print("Failed parsing")
+    raise
+
+def parseBinding(s: str) -> Iterable[AstBinding]:
+  try:
+    return map(lambda x:    ccast(x, AstBinding), astBuilder.parseBinding(s))
+  except:
+    print("Failed parsing")
+    raise
+
+def parseType(s: str) -> AstType:
+  try:
+    return ccast(astBuilder.parseType(s), AstType)
   except:
     print("Failed parsing")
     raise
