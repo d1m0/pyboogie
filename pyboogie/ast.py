@@ -57,6 +57,25 @@ class AstMapUpdate(AstExpr):
     newVal = attrib(type=AstExpr)
     def __str__(s) -> str: return "{}[{}:={}]".format(str(s.map), str(s.index), str(s.newVal))
 
+class AstInternalExpr(AstExpr):
+    """ Ast Expression nodes used only during parsing. """
+
+@attrs(frozen=True)
+class AstMapUpdateArgs(AstInternalExpr):
+    index = attrib(type=AstExpr)
+    newVal = attrib(type=AstExpr)
+    def __str__(s) -> str: return "[{}:={}]".format(str(s.index), str(s.newVal))
+
+@attrs(frozen=True)
+class AstMapIndexArgs(AstInternalExpr):
+    index = attrib(type=AstExpr)
+    def __str__(s) -> str: return "[{}]".format(str(s.index))
+
+@attrs(frozen=True)
+class AstFuncExprArgs(AstInternalExpr):
+    args = attrib(type=List[AstExpr])
+    def __str__(s) -> str: return "({})".format(",".join(map(str, s.args)))
+
 @attrs(frozen=True)
 class AstUnExpr(AstExpr):
     op = attrib(type=str)
@@ -193,15 +212,27 @@ def _toIds(toks: "PR[Any]") -> List[AstId]:
 
 class AstBuilder(BoogieParser[AstNode]):
   def onAtom(s, prod: PE, st: str, loc: int, toks: PR) -> Iterable[AstNode]:
-    assert len(toks) == 1
     if prod == s.TRUE:
+      assert len(toks) == 1
       return [ AstTrue() ]
     elif prod == s.FALSE:
+      assert len(toks) == 1
       return [ AstFalse() ]
     elif prod == s.Number:
+      assert len(toks) == 1
       return [ AstNumber(int(toks[0])) ]
     else:
-      return [ AstId(str(toks[0])) ]
+      res = AstId(str(toks[0])) # type: AstExpr
+      for cont in toks[1:]:
+        if (isinstance(cont, AstMapIndexArgs)):
+            res = AstMapIndex(res, cont.index)
+        elif (isinstance(cont, AstMapUpdateArgs)):
+            res = AstMapUpdate(res, cont.index, cont.newVal)
+        elif (isinstance(cont, AstFuncExprArgs)):
+            assert (isinstance(res, AstId))
+            res = AstFuncExpr(res, cont.args)
+
+      return [res]
 
   def onUnaryOp(s, prod: PE, st: str, loc: int, toks: PR) -> Iterable[AstNode]:
     op = str(toks[0])
@@ -300,17 +331,14 @@ class AstBuilder(BoogieParser[AstNode]):
         stmt = toks[1]
         assert isinstance(stmt, AstStmt) or isinstance(stmt, AstLabel), "Unexpected {}".format(stmt)
         return [AstLabel(label, stmt)]  #type: ignore
-  def onMapIndex(s, prod: PE, st: str, loc: int, toks: PR) -> Iterable[AstNode]:
-    mapE = toks[0]
-    indexE = toks[1]
-    assert isinstance(mapE, AstExpr) and isinstance(indexE, AstExpr)
-    return [AstMapIndex(mapE, indexE)]
-  def onMapUpdate(s, prod: PE, st: str, loc: int, toks: PR) -> Iterable[AstNode]:
-    mapE = toks[0]
-    indexE = toks[1]
-    newValE = toks[2]
-    assert isinstance(mapE, AstExpr) and isinstance(indexE, AstExpr) and isinstance(newValE, AstExpr)
-    return [AstMapUpdate(mapE, indexE, newValE)]
+  def onMapIndexArgs(s, prod: PE, st: str, loc: int, toks: PR) -> Iterable[AstNode]:
+    assert (len(toks) == 1)
+    return [AstMapIndexArgs(ccast(toks[0], AstExpr))]
+  def onMapUpdateArgs(s, prod: PE, st: str, loc: int, toks: PR) -> Iterable[AstNode]:
+    assert (len(toks) == 2)
+    return [AstMapUpdateArgs(ccast(toks[0], AstExpr), ccast(toks[1], AstExpr))]
+  def onFunAppArgs(s, prod: PE, st: str, loc: int, toks: PR) -> Iterable[AstNode]:
+    return [AstFuncExprArgs([ccast(x, AstExpr) for x in toks])]
   def onQuantified(s, prod: PE, st: str, loc: int, toks: PR) -> Iterable[AstNode]:
     assert len(toks) == 3, "NYI TypeArgs on quantified expressions"
     quantifier = str(toks[0])

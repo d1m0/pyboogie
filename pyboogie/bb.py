@@ -271,7 +271,7 @@ class Function(object):
                 rhs = stmt.rhs
 
                 while (isinstance(lhs, AstMapIndex)):
-                    rhs = AstMapUpdate(lhs, lhs.index, rhs)
+                    rhs = AstMapUpdate(lhs.map, lhs.index, rhs)
                     assert (isinstance(lhs.map, AstMapIndex) or 
                             isinstance(lhs.map, AstId))
                     lhs = lhs.map

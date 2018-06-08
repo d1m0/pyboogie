@@ -5,7 +5,8 @@ These tests focus on the core subset of boogie supported.
 from unittest import TestCase
 from ..grammar import BoogieParser
 from ..ast import parseAst, parseExprAst, AstProgram, AstImplementation,\
-    AstBody, AstBinding, AstIntType, AstAssignment, AstId, AstBinExpr, AstNumber, replace
+    AstBody, AstBinding, AstIntType, AstAssignment, AstId, AstBinExpr, AstNumber, replace,\
+    AstMapIndex, AstMapUpdate, AstFuncExpr
 from pyparsing import ParseException
 
 class TestAst(TestCase):
@@ -65,6 +66,23 @@ class TestAst(TestCase):
             root = parseAst(text)
             assert (root == expectedAst), "Expected: \n{} instead got \n{} from raw text \n{}"\
                 .format(str(expectedAst), str(root), text)
+
+    def testAtomParse(self):
+        """ Test various atom parsings (especially mixing map update/index) """
+        tests = [
+            ("x", AstId("x")),
+            ("x[4]", AstMapIndex(AstId("x"), AstNumber(4))),
+            ("x[4][5]", AstMapIndex(AstMapIndex(AstId("x"), AstNumber(4)), AstNumber(5))),
+            ("x[x:=5][4]", AstMapIndex(AstMapUpdate(AstId("x"), AstId("x"), AstNumber(5)), AstNumber(4))),
+            ("x(1,2)[x:=5][4]", AstMapIndex(AstMapUpdate(AstFuncExpr(AstId("x"), [AstNumber(1), AstNumber(2)]), AstId("x"), AstNumber(5)), AstNumber(4))),
+        ]
+        for (text, expectedAst) in tests:
+            try:
+                ast = parseExprAst(text)
+            except:
+                print ("Failed parsing {}".format(text))
+                raise
+            assert (ast == expectedAst)
 
     def test_roundtrip(self):
         "For each parse tree T in TestAst.testProgs check parseAst(str(T)) == T"

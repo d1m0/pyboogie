@@ -34,8 +34,9 @@ class BoogieParser(Generic[T]):
   def onMapType(s, prod: "ParserElement[T]", st: str, loc: int, toks:"ParseResults[T]") -> "Iterable[T]": raise Exception("NYI")
   def onType(s, prod: "ParserElement[T]", st: str, loc: int, toks:"ParseResults[T]") -> "Iterable[T]": raise Exception("NYI")
   def onLabeledStatement(s, prod: "ParserElement[T]", st: str, loc: int, toks:"ParseResults[T]") -> "Iterable[T]": raise Exception("NYI")
-  def onMapIndex(s, prod: "ParserElement[T]", st: str, loc: int, toks:"ParseResults[T]") -> "Iterable[T]": raise Exception("NYI")
-  def onMapUpdate(s, prod: "ParserElement[T]", st: str, loc: int, toks:"ParseResults[T]") -> "Iterable[T]": raise Exception("NYI")
+  def onMapIndexArgs(s, prod: "ParserElement[T]", st: str, loc: int, toks:"ParseResults[T]") -> "Iterable[T]": raise Exception("NYI")
+  def onMapUpdateArgs(s, prod: "ParserElement[T]", st: str, loc: int, toks:"ParseResults[T]") -> "Iterable[T]": raise Exception("NYI")
+  def onFunAppArgs(s, prod: "ParserElement[T]", st: str, loc: int, toks:"ParseResults[T]") -> "Iterable[T]": raise Exception("NYI")
   def onQuantified(s, prod: "ParserElement[T]", st: str, loc: int, toks:"ParseResults[T]") -> "Iterable[T]": raise Exception("NYI")
   def onBinding(s, prod: "ParserElement[T]", st: str, loc: int, toks:"ParseResults[T]") -> "Iterable[T]": raise Exception("NYI")
   def onAtom(s, prod: "ParserElement[T]", st: str, loc: int, toks:"ParseResults[T]") -> "Iterable[T]": raise Exception("NYI")
@@ -173,9 +174,6 @@ class BoogieParser(Generic[T]):
             lambda st, loc, toks:  s.onAtom(s.BitVector, st, loc, toks))
     # TODO
     # TrigAttr = Trigger | Attribute
-    s.Fun_App = s.Id + s.LPARN + csl(s.Expr) + s.RPARN # type: ParserElement[T]
-    s.Fun_App.setParseAction(
-            lambda st, loc, toks:  s.onAtom(s.Fun_App, st, loc, toks))
     s.Old = s.OLD + s.LPARN + s.Expr + s.RPARN # type: ParserElement[T]
     s.Old.setParseAction(
             lambda st, loc, toks:  s.onAtom(s.Old, st, loc, toks))
@@ -188,14 +186,21 @@ class BoogieParser(Generic[T]):
     s.Quantified.setParseAction(
             lambda st, loc, toks:  s.onQuantified(s.Old, st, loc, toks))
 
-    s.MapUpdate = s.Id + S(s.LSQBR) + s.Expr + s.ASSGN + s.Expr + S(s.RSQBR)
-    s.MapUpdate.setParseAction(
-            lambda st, loc, toks:  s.onMapUpdate(s.Old, st, loc, toks))
-
-    s.MapIndex = s.Id + S(s.LSQBR) + s.Expr + S(s.RSQBR)
-    s.MapIndex.setParseAction(
-            lambda st, loc, toks:  s.onMapIndex(s.Old, st, loc, toks))
-    s.Atom = s.Primitive | s.Fun_App | s.Old |  s.MapIndex | s.Id  # type: ParserElement[T]
+    s.AtomIdCont = F()
+    s.AtomId = s.Id + O(s.AtomIdCont)
+    s.AtomId.setParseAction(
+            lambda st, loc, toks:  s.onAtom(s.Id, st, loc, toks))
+    s.Atom = (s.Primitive | s.Old | s.AtomId) # type: ParserElement[T]
+    s.MapUpdateArgs = S(s.LSQBR) + s.Expr + s.ASSGN + s.Expr + S(s.RSQBR)
+    s.MapUpdateArgs.setParseAction(
+            lambda st, loc, toks:  s.onMapUpdateArgs(s.Old, st, loc, toks))
+    s.MapIndexArgs = S(s.LSQBR) + s.Expr + S(s.RSQBR)
+    s.MapIndexArgs.setParseAction(
+            lambda st, loc, toks:  s.onMapIndexArgs(s.Old, st, loc, toks))
+    s.FunAppArgs = s.LPARN + csl(s.Expr) + s.RPARN  # type: ParserElement[T]
+    s.FunAppArgs.setParseAction(
+            lambda st, loc, toks:  s.onFunAppArgs(s.FunAppArgs, st, loc, toks))
+    s.AtomIdCont << (s.MapUpdateArgs | s.MapIndexArgs | s.FunAppArgs) + O(s.AtomIdCont)
 
     s.ArithExpr = operatorPrecedence(s.Atom, [
       (s.ArithUnOp, 1, opAssoc.RIGHT, \
@@ -205,13 +210,7 @@ class BoogieParser(Generic[T]):
       (s.AddOp, 2, opAssoc.LEFT, \
            lambda st, loc, toks: s.onLABinOp(s.AddOp, st, loc, toks[0])),
     ]) # type: ParserElement[T]
-    # TODO: Add support for Map operations
-    #MapUpdate = ASSGN + Expr
-    #MapOp = LSQBR + csl(Expr) + O(MapUpdate) + RSQBR | \
-    #        LSQBR + Number + COLN + Number + RSQBR
-    #E8 = E9 + ZoM(MapOp)
-    # TODO: Add support for ConcatOp
-    #E4 << E5 + ZoM(ConcatOp + E4)
+    # TODO: Add support for M[x,y,z:=foo], M[a:b], concat ops
     s.RelExpr = s.ArithExpr + s.RelOp + s.ArithExpr # type: ParserElement[T]
     s.RelExpr.setParseAction(
             lambda st, loc, toks: s.onNABinOp(s.RelExpr, st, loc, toks))
@@ -275,7 +274,9 @@ class BoogieParser(Generic[T]):
             O(s.Else)
 
     s.CallLhs = csl(s.Id) + s.ASSGN
-    s.Lhs =  s.MapIndex | s.Id
+    s.Lhs =  s.Id + ZoM(s.MapIndexArgs)
+    s.Lhs.setParseAction(
+        lambda st, loc, toks: s.onAtom(s.Id, st, loc, toks))
     s.Label = s.Id | s.Number
 
     s.AssertStmt = S(s.ASSERT) + s.Expr + S(s.SEMI) # type: ParserElement[T]

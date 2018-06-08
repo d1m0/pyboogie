@@ -109,6 +109,34 @@ class TestAst(TestCase):
                 ]
             ]
         ),
+        (# One dimensional map assignment
+            """
+                implementation main() {
+                    var x: [int]int;
+                    var y: int;
+                start:
+                    x[y] := 0;
+                }
+            """,
+            ["main", [], [("x", "[int]int"), ("y", "int")], [], [
+                ("start", [], ["x:=x[y:=0];"], []),
+                ]
+            ]
+        ),
+        (# Two dimensional map assignment
+            """
+                implementation main() {
+                    var x: [int][int]int;
+                    var y,z: int;
+                start:
+                    x[y][z] := 0;
+                }
+            """,
+            ["main", [], [("x", "[int][int]int"), ("y", "int"), ("z", "int")], [], [
+                ("start", [], ["x:=x[y:=x[y][z:=0]];"], []),
+                ]
+            ]
+        ),
     ]
     badProgs = [
         """
