@@ -105,7 +105,7 @@ class BoogieParser(Generic[T]):
     s.RETURN = K("return")
     s.IMPLEMENTATION = K("implementation")
 
-    s.Id = R("[a-zA-Z_][a-zA-Z0-9_#]*") # type: ParserElement[T]
+    s.Id = R("[a-zA-Z_#.$'`~^?\\\\][a-zA-Z0-9_#.$'`~^?\\\\]*") # type: ParserElement[T]
     s.Id.setParseAction(lambda st, loc, toks:  s.onAtom(s.Id, st, loc, toks))
     s.ParentEdge = O(s.UNIQUE) + s.Id
     s.ParentInfo = S("<:") + csl(s.ParentEdge)

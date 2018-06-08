@@ -67,6 +67,31 @@ class TestAst(TestCase):
             assert (root == expectedAst), "Expected: \n{} instead got \n{} from raw text \n{}"\
                 .format(str(expectedAst), str(root), text)
 
+    def testId(self):
+        tests = [
+            ("x", AstId("x")),
+            ("x?.$_~+~$#~", AstBinExpr(AstId("x?.$_~"), "+", AstId("~$#~"))),
+        ]
+        for (text, expectedAst) in tests:
+            try:
+                ast = parseExprAst(text)
+            except:
+                print ("Failed parsing {}".format(text))
+                raise
+            assert (ast == expectedAst)
+
+        
+        badTests = [
+            # Identifiers don't start with numbers
+            ("4a"), ("4?.$_~+~$#~"),
+            # Identifiers don't include bin operators
+            ("x-"), ("x+"), ("x*"), ("x/"), ("x("), ("x)"), ("x%"),
+        ]
+        for text in badTests:
+            with self.assertRaises(ParseException):
+                parseExprAst(text)
+
+
     def testAtomParse(self):
         """ Test various atom parsings (especially mixing map update/index) """
         tests = [
