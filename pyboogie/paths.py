@@ -1,8 +1,8 @@
 from .ast import stmt_changed, AstAssignment, AstId, AstHavoc, \
-        AstAssert, AstTrue, replace, AstNode, AstExpr, AstStmt
+        AstAssert, AstTrue, replace, AstNode, AstExpr, AstStmt, LabelT
 from .z3_embed import Or, And, Int, And, stmt_to_z3, satisfiable,\
     model, TypeEnv_T, get_typeenv
-from .bb import BB, Label_T, Function
+from .bb import BB, Function
 from .ssa import SSAEnv, is_ssa_str, ReplMap_T, get_ssa_tenv
 from .predicate_transformers import wp_stmts, sp_stmts
 from .util import flattenList, first, ccast

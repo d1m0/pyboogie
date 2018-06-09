@@ -1,6 +1,6 @@
 #pylint: disable=no-self-argument
 from .ast import ast_and, replace, AstBinExpr, AstAssert, AstAssume, \
-        AstTrue, AstExpr, AstStmt, ReplMap_T
+        AstTrue, AstExpr, AstStmt, LabelT, ReplMap_T
 from .util import split, nonempty, powerset, ccast
 from .z3_embed import expr_to_z3, Unknown, counterex, \
         Implies, And, tautology, satisfiable, unsatisfiable, to_smt2,\
@@ -11,7 +11,7 @@ from .ssa import SSAEnv, unssa_z3_model, get_ssa_tenv
 from .predicate_transformers import wp_stmts, sp_stmt
 from .interp import Store
 from copy import copy
-from .bb import Function, Label_T, BB
+from .bb import Function, BB
 from typing import Dict, Optional, Set, Tuple, List, Any
 import z3
 
@@ -28,10 +28,10 @@ class Violation:
       return s._typ == "inductiveness"
   def isSafety(s) -> bool:
       return s._typ == "safety"
-  def startBB(s) -> Label_T:
+  def startBB(s) -> LabelT:
       assert isinstance(s._path[0], SSABBNode)
       return s._path[0].bb.label
-  def endBB(s) -> Label_T:
+  def endBB(s) -> LabelT:
       assert isinstance(s._path[-1], SSABBNode)
       return s._path[-1].bb.label
   def startReplM(s) -> ReplMap_T:
@@ -82,8 +82,8 @@ class Violation:
 
     return (lblPath, envs, last_stmts)
 
-InvNetwork = Dict[Label_T, Set[AstExpr]]
-ViolationNetwork = Dict[Label_T, Set[Tuple[AstExpr, "Violation"]]]
+InvNetwork = Dict[LabelT, Set[AstExpr]]
+ViolationNetwork = Dict[LabelT, Set[Tuple[AstExpr, "Violation"]]]
 
 def filterCandidateInvariants(fun: Function, preCond: AstExpr, postCond: AstExpr, cutPoints: InvNetwork, timeout: Optional[int]=None) -> Tuple[ViolationNetwork, ViolationNetwork, InvNetwork, List[Violation]]:
     assert (len(cutPoints) == 1)

@@ -100,7 +100,7 @@ class TestAst(TestCase):
             ("x[4]", AstMapIndex(AstId("x"), AstNumber(4))),
             ("x[4][5]", AstMapIndex(AstMapIndex(AstId("x"), AstNumber(4)), AstNumber(5))),
             ("x[x:=5][4]", AstMapIndex(AstMapUpdate(AstId("x"), AstId("x"), AstNumber(5)), AstNumber(4))),
-            ("x(1,2)[x:=5][4]", AstMapIndex(AstMapUpdate(AstFuncExpr(AstId("x"), [AstNumber(1), AstNumber(2)]), AstId("x"), AstNumber(5)), AstNumber(4))),
+            ("x(1,2)[x:=5][4]", AstMapIndex(AstMapUpdate(AstFuncExpr("x", [AstNumber(1), AstNumber(2)]), AstId("x"), AstNumber(5)), AstNumber(4))),
         ]
         for (text, expectedAst) in tests:
             try:
@@ -138,17 +138,17 @@ class TestAst(TestCase):
         good =[
             ("[int]int", AstMapType([], [AstIntType()], AstIntType())),
             ("[int, bool]int", AstMapType([], [AstIntType(), AstBoolType()], AstIntType())),
-            ("<a>[a]a", AstMapType([AstId("a")], [AstCompoundType(AstId("a"), [])], AstCompoundType(AstId("a"), []))),
-            ("<a>[a]int", AstMapType([AstId("a")], [AstCompoundType(AstId("a"), [])], AstIntType())),
-            ("C a", AstCompoundType(AstId("C"), [AstCompoundType(AstId("a"), [])])),
-            ("<a>[C a, int]bool", AstMapType([AstId("a")], [AstCompoundType(AstId("C"), [AstCompoundType(AstId("a"), [])]), AstIntType()], AstBoolType())),
-            ("C a b c", AstCompoundType(AstId("C"), [AstCompoundType(AstId("a"), []), AstCompoundType(AstId("b"), []), AstCompoundType(AstId("c"), [])])),
-            ("C a (b c)", AstCompoundType(AstId("C"), [AstCompoundType(AstId("a"), []), AstCompoundType(AstId("b"), [AstCompoundType(AstId("c"), [])])])),
-            ("C a int c", AstCompoundType(AstId("C"), [AstCompoundType(AstId("a"), []), AstIntType(), AstCompoundType(AstId("c"), [])])),
-            ("C a (b int)", AstCompoundType(AstId("C"), [AstCompoundType(AstId("a"), []), AstCompoundType(AstId("b"), [AstIntType()])])),
-            ("C a [b]int", AstCompoundType(AstId("C"), [AstCompoundType(AstId("a"), []), AstMapType([], [AstCompoundType(AstId("b"), [])], AstIntType())])),
+            ("<a>[a]a", AstMapType([("a")], [AstCompoundType(("a"), [])], AstCompoundType(("a"), []))),
+            ("<a>[a]int", AstMapType([("a")], [AstCompoundType(("a"), [])], AstIntType())),
+            ("C a", AstCompoundType(("C"), [AstCompoundType(("a"), [])])),
+            ("<a>[C a, int]bool", AstMapType([("a")], [AstCompoundType(("C"), [AstCompoundType(("a"), [])]), AstIntType()], AstBoolType())),
+            ("C a b c", AstCompoundType(("C"), [AstCompoundType(("a"), []), AstCompoundType(("b"), []), AstCompoundType(("c"), [])])),
+            ("C a (b c)", AstCompoundType(("C"), [AstCompoundType(("a"), []), AstCompoundType(("b"), [AstCompoundType(("c"), [])])])),
+            ("C a int c", AstCompoundType(("C"), [AstCompoundType(("a"), []), AstIntType(), AstCompoundType(("c"), [])])),
+            ("C a (b int)", AstCompoundType(("C"), [AstCompoundType(("a"), []), AstCompoundType(("b"), [AstIntType()])])),
+            ("C a [b]int", AstCompoundType(("C"), [AstCompoundType(("a"), []), AstMapType([], [AstCompoundType(("b"), [])], AstIntType())])),
             ("bv5", AstBVType(5)),
-            ("C bv5 int", AstCompoundType(AstId("C"), [AstBVType(5), AstIntType()]))
+            ("C bv5 int", AstCompoundType(("C"), [AstBVType(5), AstIntType()]))
         ]
 
         bad = [

@@ -7,7 +7,7 @@ from .paths import nd_bb_path_to_ssa, \
         extract_ssa_path_vars, NondetPath, NondetSSAPath, NondetPathEnvs_T
 from .predicate_transformers import sp_stmts
 from .ssa import SSAEnv, get_ssa_tenv
-from .bb import Function, Label_T, BB
+from .bb import Function, BB
 from .interp import Store, store_to_expr
 from .util import ccast
 from itertools import permutations

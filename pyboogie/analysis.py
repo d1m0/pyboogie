@@ -1,8 +1,8 @@
 from copy import copy
-from .bb import Function, BB, Label_T, LocT, prevLocations, nextLocations
+from .bb import Function, BB, LocT, prevLocations, nextLocations
 from .ast import AstAssert, AstAssume, AstHavoc, \
         AstAssignment, stmt_read, stmt_changed, AstBinExpr, expr_read,\
-        AstStmt, AstExpr, AstId
+        AstStmt, AstExpr, AstId, LabelT
 from functools import reduce
 from typing import TypeVar, Callable, Dict, Iterable, Set, Optional, Tuple, List
 from .util import unique
@@ -64,7 +64,7 @@ def dataflow(fun: Function, transformerMap: TransformerMapT, unionF: UnionT, bot
 T=TypeVar("T")
 Transformer_T = Dict[type, Callable[[AstStmt, Set[T]], Set[T]]]
 Union_T = Callable[[Iterable[Set[T]]], Set[T]]
-DFlowState_T = Dict[Label_T, Set[T]]
+DFlowState_T = Dict[LabelT, Set[T]]
 
 LiveVarsState = Set[str]
 def livevars(fun: Function) -> DFlowStateT[LiveVarsState]:

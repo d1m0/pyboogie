@@ -4,8 +4,10 @@ from .util import ccast, clcast
 from pyparsing import ParseResults as PR, ParserElement as PE
 from functools import reduce
 from typing import List, Iterable, Set, TYPE_CHECKING, Any, Union, Dict, TypeVar, Callable, Tuple, NamedTuple, Type
-
 from attr import attrs, attrib
+
+LabelT = str
+
 class AstNode:
     def __eq__(self, other: object) -> bool:
         """ Ast nodes compare via structural equality """
@@ -27,20 +29,20 @@ class AstBVType(AstBuiltinType):
     def __str__(s) -> str: return "int"
 @attrs(frozen=True)
 class AstMapType(AstBuiltinType):
-    typeVars = attrib(type=List["AstId"])
+    typeVars = attrib(type=List[str])
     domainT = attrib(type=List[AstType])
     rangeT = attrib(type=AstType)
     def __str__(s) -> str: return "{}[{}]{}".format(
-        ("" if len(s.typeVars) == 0 else "<{}>".format(",".join(map(str, s.typeVars)))),
+        ("" if len(s.typeVars) == 0 else "<{}>".format(",".join(s.typeVars))),
         ",".join(map(str, s.domainT)),
         str(s.rangeT))
 
 # User-defined type constructors
 @attrs(frozen=True)
 class AstCompoundType(AstType):
-    name = attrib(type="AstId")
+    name = attrib(type=str)
     typeArgs = attrib(type=List[AstType])
-    def __str__(s) -> str: return "{} {}".format(str(s.name), " ".join(map(str, s.typeArgs)))
+    def __str__(s) -> str: return "{} {}".format(s.name, " ".join(map(str, s.typeArgs)))
 
 # Expressions
 class AstExpr(AstNode): pass
@@ -123,7 +125,7 @@ class AstForallExpr(AstExpr):
 
 @attrs(frozen=True)
 class AstFuncExpr(AstExpr):
-    funcName = attrib(type=AstId)
+    funcName = attrib(type=str)
     ops = attrib(type=List[AstExpr])
     def __str__(s) -> str:
         return str(s.funcName) + "(" + ",".join(map(str, s.ops)) +  ")"
@@ -163,7 +165,7 @@ class AstReturn(AstStmt):
 
 @attrs(frozen=True)
 class AstGoto(AstStmt):
-    labels = attrib(type=List[AstId])
+    labels = attrib(type=List[LabelT])
     def __str__(s) -> str: return "goto " + ",".join(map(str, s.labels)) + ";"
 
 # Functions
@@ -223,9 +225,6 @@ def reduce_nodes(node: AstNode, cb: Callable[[AstNode, List[T]], T]) -> T:
               [ reduce_nodes(val, cb)
                   for val in node.__dict__.values() if isinstance(val, AstNode) ])
 
-def _toIds(toks: "PR[Any]") -> List[AstId]:
-    return [ccast(x, AstId) for x in toks]
-
 class AstBuilder(BoogieParser[AstNode]):
   def onAtom(s, prod: PE, st: str, loc: int, toks: PR) -> Iterable[AstNode]:
     if prod == s.TRUE:
@@ -246,7 +245,7 @@ class AstBuilder(BoogieParser[AstNode]):
             res = AstMapUpdate(res, cont.index, cont.newVal)
         elif (isinstance(cont, AstFuncExprArgs)):
             assert (isinstance(res, AstId))
-            res = AstFuncExpr(res, cont.args)
+            res = AstFuncExpr(res.name, cont.args)
 
       return [res]
 
@@ -290,7 +289,7 @@ class AstBuilder(BoogieParser[AstNode]):
     return [ AstReturn() ]
   def onGoto(s, prod: PE, st: str, loc: int, toks: PR) -> Iterable[AstNode]:
     assert(len(toks) > 0)
-    return [ AstGoto(_toIds(toks)) ]
+    return [ AstGoto([x.name for x in clcast(toks, AstId)]) ]
   def onAssignment(s, prod: PE, st: str, loc: int, toks: PR) -> Iterable[AstNode]:
     assert (len(toks) == 2)
     assert (len(toks[0]) == 1)
@@ -298,7 +297,7 @@ class AstBuilder(BoogieParser[AstNode]):
     return [ AstAssignment(toks[0][0], toks[1][0]) ]
   def onHavoc(s, prod: PE, st: str, loc: int, toks: PR) -> Iterable[AstNode]:
     assert (len(toks) > 0)
-    return [ AstHavoc(_toIds(toks)) ]
+    return [ AstHavoc(clcast(toks, AstId)) ]
   def onProgram(s, prod: PE, st: str, loc: int, toks: PR) -> Iterable[AstNode]:
     decls = [ccast(x, AstDecl) for x in toks] # type: List[AstDecl] 
     return [ AstProgram(decls) ]
@@ -318,21 +317,18 @@ class AstBuilder(BoogieParser[AstNode]):
       return [ AstBVType(int(toks[0][2:])) ]
   def onMapType(s, prod: PE, st: str, loc: int, toks: PR) -> Iterable[AstNode]:
     assert len(toks) == 3
-    return [ AstMapType(clcast(toks[0], AstId), clcast(toks[1], AstType), ccast(toks[2], AstType)) ]
+    return [ AstMapType([x.name for x in clcast(toks[0], AstId)], clcast(toks[1], AstType), ccast(toks[2], AstType)) ]
   def onCompoundType(s, prod: PE, st: str, loc: int, toks: PR) -> Iterable[AstNode]:
-    print ("onCompoundType", toks)
-    id = ccast(toks[0], AstId)
     args = [] # type: List[AstType]
     for t in toks[1:]:
         if isinstance(t, AstId):
-            args.append(AstCompoundType(t, []))
+            args.append(AstCompoundType(t.name, []))
         else:
             assert isinstance(t, AstType)
             args.append(t)
-    return [ AstCompoundType(ccast(toks[0], AstId), args) ]
+    return [ AstCompoundType(ccast(toks[0], AstId).name, args) ]
 
   def onType(s, prod: PE, st: str, loc: int, toks: PR) -> Iterable[AstNode]:
-    print ("onType", toks)
     assert len(toks) == 1
     return [ ccast(toks[0], AstType) ]
   def onBody(s, prod: PE, st: str, loc: int, toks: PR) -> Iterable[AstNode]:
@@ -350,7 +346,7 @@ class AstBuilder(BoogieParser[AstNode]):
     body = toks[3][0]  # type: AstBody
     return [ AstImplementation(name, listify(parameters), listify(returns), body) ]
   def onLabeledStatement(s, prod: PE, st: str, loc: int, toks: PR) -> Iterable[AstNode]:
-    label = str(toks[0])
+    label = str(toks[0]) # type: LabelT
     if (len(toks) == 1):
         # Empty label
         return [AstLabel(label, None)]  #type: ignore

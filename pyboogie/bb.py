@@ -1,17 +1,16 @@
 from .ast import parseAst, AstImplementation, AstLabel, \
         AstAssert, AstAssume, AstHavoc, AstAssignment, AstGoto, \
         AstReturn, AstNode, AstStmt, AstType, AstProgram, AstMapIndex,\
-        AstMapUpdate, AstId, parseType, parseStmt
+        AstMapUpdate, AstId, parseType, parseStmt, LabelT
 from collections import namedtuple
 from .util import unique, get_uid, ccast
 from typing import Dict, List, Iterable, Tuple, Iterator, Any, Set, Optional
 from json import loads
 
-Label_T = str
 Bindings_T = List[Tuple[str, AstType]]
 
 class BB(List[AstStmt]):
-    def __init__(self, label: Label_T, predecessors: Iterable["BB"], stmts: Iterable[AstStmt], successors: Iterable["BB"], internal: bool = False) -> None:
+    def __init__(self, label: LabelT, predecessors: Iterable["BB"], stmts: Iterable[AstStmt], successors: Iterable["BB"], internal: bool = False) -> None:
         super().__init__(stmts)
         self.label = label
         self._predecessors = list(predecessors)
@@ -247,7 +246,7 @@ class Function(object):
     def bbs(self) -> Iterable[BB]:
         return self._bbs.values()
 
-    def get_bb(self, label: Label_T) -> BB:
+    def get_bb(self, label: LabelT) -> BB:
         return self._bbs[label]
 
     def _rewrite_assingments(self) -> None:
