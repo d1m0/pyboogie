@@ -1,6 +1,6 @@
 #pylint: disable=no-self-argument,multiple-statements
 from .grammar import BoogieParser
-from .util import ccast
+from .util import ccast, clcast
 from pyparsing import ParseResults as PR, ParserElement as PE
 from functools import reduce
 from typing import List, Iterable, Set, TYPE_CHECKING, Any, Union, Dict, TypeVar, Callable, Tuple, NamedTuple, Type
@@ -15,16 +15,32 @@ class AstNode:
 
 # Types
 class AstType(AstNode): pass
-class AstIntType(AstType):
+# Builtin Types
+class AstBuiltinType(AstType): pass
+class AstIntType(AstBuiltinType):
     def __str__(s) -> str: return "int"
-class AstBoolType(AstType):
+class AstBoolType(AstBuiltinType):
     def __str__(s) -> str: return "bool"
-
 @attrs(frozen=True)
-class AstMapType(AstType):
-    domainT = attrib(type=AstType)
+class AstBVType(AstBuiltinType):
+    numBits = attrib(type=int)
+    def __str__(s) -> str: return "int"
+@attrs(frozen=True)
+class AstMapType(AstBuiltinType):
+    typeVars = attrib(type=List["AstId"])
+    domainT = attrib(type=List[AstType])
     rangeT = attrib(type=AstType)
-    def __str__(s) -> str: return "[{}]{}".format(str(s.domainT), str(s.rangeT))
+    def __str__(s) -> str: return "{}[{}]{}".format(
+        ("" if len(s.typeVars) == 0 else "<{}>".format(",".join(map(str, s.typeVars)))),
+        ",".join(map(str, s.domainT)),
+        str(s.rangeT))
+
+# User-defined type constructors
+@attrs(frozen=True)
+class AstCompoundType(AstType):
+    name = attrib(type="AstId")
+    typeArgs = attrib(type=List[AstType])
+    def __str__(s) -> str: return "{} {}".format(str(s.name), " ".join(map(str, s.typeArgs)))
 
 # Expressions
 class AstExpr(AstNode): pass
@@ -289,23 +305,34 @@ class AstBuilder(BoogieParser[AstNode]):
   def onLocalVarDecl(s, prod: PE, st: str, loc: int, toks: PR) -> Iterable[AstNode]:
     assert len(toks) == 1 and isinstance(toks[0], AstBinding)
     return toks
-  def onTypeAtom(s, prod: PE, st: str, loc: int, toks: PR) -> Iterable[AstNode]:
+  def onPrimitiveType(s, prod: PE, st: str, loc: int, toks: PR) -> Iterable[AstNode]:
     # Currently only handle ints
     assert len(toks) == 1
-    if toks[0] == 'int':
+    if prod == s.INT:
       return [ AstIntType() ]
-    elif toks[0] == 'bool':
+    elif prod == s.BOOL:
       return [ AstBoolType() ]
     else:
-      raise Exception("NYI type: {}".format(toks[0]))
+      assert prod == s.BVType
+      assert toks[0][0:2] == 'bv'
+      return [ AstBVType(int(toks[0][2:])) ]
   def onMapType(s, prod: PE, st: str, loc: int, toks: PR) -> Iterable[AstNode]:
-    # Currently only handle ints
-    assert len(toks) == 2
-    domainT = toks[0]
-    rangeT = toks[1]
-    assert isinstance(domainT, AstType) and isinstance(rangeT, AstType)
-    return [ AstMapType(domainT, rangeT) ]
+    assert len(toks) == 3
+    return [ AstMapType(clcast(toks[0], AstId), clcast(toks[1], AstType), ccast(toks[2], AstType)) ]
+  def onCompoundType(s, prod: PE, st: str, loc: int, toks: PR) -> Iterable[AstNode]:
+    print ("onCompoundType", toks)
+    id = ccast(toks[0], AstId)
+    args = [] # type: List[AstType]
+    for t in toks[1:]:
+        if isinstance(t, AstId):
+            args.append(AstCompoundType(t, []))
+        else:
+            assert isinstance(t, AstType)
+            args.append(t)
+    return [ AstCompoundType(ccast(toks[0], AstId), args) ]
+
   def onType(s, prod: PE, st: str, loc: int, toks: PR) -> Iterable[AstNode]:
+    print ("onType", toks)
     assert len(toks) == 1
     return [ ccast(toks[0], AstType) ]
   def onBody(s, prod: PE, st: str, loc: int, toks: PR) -> Iterable[AstNode]:

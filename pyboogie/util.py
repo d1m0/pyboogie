@@ -15,6 +15,10 @@ def ccast(a: Any, t: Type[C]) -> C:
     assert(isinstance(a, t))
     return a
 
+def clcast(a: Any, t: Type[C]) -> List[C]:
+    """ Checked cast down to the type List[t] """
+    return [ccast(x, t) for x in a]
+
 def error(*args: Any) -> None:
   if (len(args) > 0 and str(args[0]) and '%' in args[0]):
     fmt = args[0]

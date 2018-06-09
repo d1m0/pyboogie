@@ -6,7 +6,8 @@ from unittest import TestCase
 from ..grammar import BoogieParser
 from ..ast import parseAst, parseExprAst, AstProgram, AstImplementation,\
     AstBody, AstBinding, AstIntType, AstAssignment, AstId, AstBinExpr, AstNumber, replace,\
-    AstMapIndex, AstMapUpdate, AstFuncExpr
+    AstMapIndex, AstMapUpdate, AstFuncExpr, AstMapType, AstBoolType, AstBVType, AstCompoundType,\
+    parseType
 from pyparsing import ParseException
 
 class TestAst(TestCase):
@@ -108,7 +109,6 @@ class TestAst(TestCase):
                 print ("Failed parsing {}".format(text))
                 raise
             assert (ast == expectedAst)
-
     def test_roundtrip(self):
         "For each parse tree T in TestAst.testProgs check parseAst(str(T)) == T"
         for (_, expected) in self.testProgs:
@@ -133,3 +133,35 @@ class TestAst(TestCase):
             expectedExpr = parseExprAst(expected) if (isinstance(expected, str)) else expected
             assert (replacedExp == expectedExpr),\
                 "Bad replace: Expected {} got {}".format(expected, replacedExp)
+
+    def testTypes(self):
+        good =[
+            ("[int]int", AstMapType([], [AstIntType()], AstIntType())),
+            ("[int, bool]int", AstMapType([], [AstIntType(), AstBoolType()], AstIntType())),
+            ("<a>[a]a", AstMapType([AstId("a")], [AstCompoundType(AstId("a"), [])], AstCompoundType(AstId("a"), []))),
+            ("<a>[a]int", AstMapType([AstId("a")], [AstCompoundType(AstId("a"), [])], AstIntType())),
+            ("C a", AstCompoundType(AstId("C"), [AstCompoundType(AstId("a"), [])])),
+            ("<a>[C a, int]bool", AstMapType([AstId("a")], [AstCompoundType(AstId("C"), [AstCompoundType(AstId("a"), [])]), AstIntType()], AstBoolType())),
+            ("C a b c", AstCompoundType(AstId("C"), [AstCompoundType(AstId("a"), []), AstCompoundType(AstId("b"), []), AstCompoundType(AstId("c"), [])])),
+            ("C a (b c)", AstCompoundType(AstId("C"), [AstCompoundType(AstId("a"), []), AstCompoundType(AstId("b"), [AstCompoundType(AstId("c"), [])])])),
+            ("C a int c", AstCompoundType(AstId("C"), [AstCompoundType(AstId("a"), []), AstIntType(), AstCompoundType(AstId("c"), [])])),
+            ("C a (b int)", AstCompoundType(AstId("C"), [AstCompoundType(AstId("a"), []), AstCompoundType(AstId("b"), [AstIntType()])])),
+            ("C a [b]int", AstCompoundType(AstId("C"), [AstCompoundType(AstId("a"), []), AstMapType([], [AstCompoundType(AstId("b"), [])], AstIntType())])),
+            ("bv5", AstBVType(5)),
+            ("C bv5 int", AstCompoundType(AstId("C"), [AstBVType(5), AstIntType()]))
+        ]
+
+        bad = [
+            ("C [int]int a"), # Map types must be the last type in type argument list
+        ]
+        for (text, expectedAst) in good:
+            try:
+                t = parseType(text)
+            except ParseException:
+                print("Failed parsing", text)
+                raise
+            assert t == expectedAst, "Expected: {} got {}".format(expectedAst, t)
+
+        for text in bad:
+            with self.assertRaises(ParseException):
+                parseType(text)

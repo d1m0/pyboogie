@@ -30,8 +30,9 @@ class BoogieParser(Generic[T]):
   def onImplementationDecl(s, prod: "ParserElement[T]", st: str, loc: int, toks:"ParseResults[T]") -> "Iterable[T]": raise Exception("NYI")
   def onBody(s, prod: "ParserElement[T]", st: str, loc: int, toks:"ParseResults[T]") -> "Iterable[T]": raise Exception("NYI")
   def onLocalVarDecl(s, prod: "ParserElement[T]", st: str, loc: int, toks:"ParseResults[T]") -> "Iterable[T]": raise Exception("NYI")
-  def onTypeAtom(s, prod: "ParserElement[T]", st: str, loc: int, toks:"ParseResults[T]") -> "Iterable[T]": raise Exception("NYI")
+  def onPrimitiveType(s, prod: "ParserElement[T]", st: str, loc: int, toks:"ParseResults[T]") -> "Iterable[T]": raise Exception("NYI")
   def onMapType(s, prod: "ParserElement[T]", st: str, loc: int, toks:"ParseResults[T]") -> "Iterable[T]": raise Exception("NYI")
+  def onCompoundType(s, prod: "ParserElement[T]", st: str, loc: int, toks:"ParseResults[T]") -> "Iterable[T]": raise Exception("NYI")
   def onType(s, prod: "ParserElement[T]", st: str, loc: int, toks:"ParseResults[T]") -> "Iterable[T]": raise Exception("NYI")
   def onLabeledStatement(s, prod: "ParserElement[T]", st: str, loc: int, toks:"ParseResults[T]") -> "Iterable[T]": raise Exception("NYI")
   def onMapIndexArgs(s, prod: "ParserElement[T]", st: str, loc: int, toks:"ParseResults[T]") -> "Iterable[T]": raise Exception("NYI")
@@ -140,18 +141,23 @@ class BoogieParser(Generic[T]):
     ####### Types
     s.Type = F() # type: ParserElement[T]
     s.BVType = R("bv[0-9][0-9]*")
-    s.TypeAtom = s.INT | s.BOOL | s.BVType
-    s.TypeAtom.setParseAction(lambda st, loc, toks: s.onTypeAtom(s.Type, st, loc, toks))
-    s.TypeArgs = S(s.LT) + csl(s.Type) + S(s.GT)
-    s.MapType = O(s.TypeArgs) + s.LSQBR + csl(s.Type) + s.RSQBR + s.Type
+    s.INT.setParseAction(lambda st, loc, toks: s.onPrimitiveType(s.INT, st, loc, toks))
+    s.BOOL.setParseAction(lambda st, loc, toks: s.onPrimitiveType(s.BOOL, st, loc, toks))
+    s.BVType.setParseAction(lambda st, loc, toks: s.onPrimitiveType(s.BVType, st, loc, toks))
+
+    s.TypeAtom = s.INT | s.BOOL | s.BVType | S(s.LPARN) + s.Type + S(s.RPARN)
+    s.TypeArgs = S(s.LT) + csl(s.Id) + S(s.GT)
+    s.MapType = G(O(s.TypeArgs)) + S(s.LSQBR) + G(csl(s.Type)) + S(s.RSQBR) + s.Type
     s.MapType.setParseAction(lambda st, loc, toks: s.onMapType(s.Type, st, loc, toks))
 
     s.TypeCtorArgs = F()
-    s.TypeCtorArgs << s.TypeAtom + O(s.TypeCtorArgs) |\
-                   s.Id + O(s.TypeCtorArgs) |\
-                   s.MapType
+    s.TypeCtorArgs << (s.TypeAtom + O(s.TypeCtorArgs)\
+                   | s.Id + O(s.TypeCtorArgs)\
+                   | s.MapType)
 
-    s.Type << (s.TypeAtom | s.MapType | s.Id + O(s.TypeCtorArgs)) #pylint: disable=expression-not-assigned
+    s.CompoundType = s.Id + O(s.TypeCtorArgs)
+    s.CompoundType.setParseAction(lambda st, loc, toks: s.onCompoundType(s.CompoundType, st, loc, toks))
+    s.Type << (s.TypeAtom | s.MapType | s.CompoundType) #pylint: disable=expression-not-assigned
     s.Type.setParseAction(lambda st, loc, toks: s.onType(s.Type, st, loc, toks))
     s.IdsType = csl(s.Id) + s.COLN + s.Type
     s.IdsType.setParseAction(lambda st, loc, toks: s.onBinding(s.Type, st, loc, toks))
