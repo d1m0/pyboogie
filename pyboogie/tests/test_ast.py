@@ -7,8 +7,8 @@ from ..grammar import BoogieParser
 from ..ast import parseAst, parseExprAst, AstProgram, AstImplementation,\
     AstBody, AstBinding, AstIntType, AstAssignment, AstId, AstBinExpr, AstNumber, replace,\
     AstMapIndex, AstMapUpdate, AstFuncExpr, AstMapType, AstBoolType, AstBVType, AstCompoundType,\
-    parseType
-from pyparsing import ParseException
+    parseType, AstTypeConstructorDecl, astBuilder, AstAttribute
+from pyparsing import ParseException, StringEnd
 
 class TestAst(TestCase):
     testProgs = [
@@ -92,7 +92,6 @@ class TestAst(TestCase):
             with self.assertRaises(ParseException):
                 parseExprAst(text)
 
-
     def testAtomParse(self):
         """ Test various atom parsings (especially mixing map update/index) """
         tests = [
@@ -109,6 +108,7 @@ class TestAst(TestCase):
                 print ("Failed parsing {}".format(text))
                 raise
             assert (ast == expectedAst)
+
     def test_roundtrip(self):
         "For each parse tree T in TestAst.testProgs check parseAst(str(T)) == T"
         for (_, expected) in self.testProgs:
@@ -165,3 +165,19 @@ class TestAst(TestCase):
         for text in bad:
             with self.assertRaises(ParseException):
                 parseType(text)
+
+    def testDecls(self):
+        good =[
+            ("type C;", AstTypeConstructorDecl("C", [], False, [])),
+            ("type C A;", AstTypeConstructorDecl("C", ["A"], False, [])),
+            ("type finite C A;", AstTypeConstructorDecl("C", ["A"], True, [])),
+            ("type { :foo 4 } finite C A;", AstTypeConstructorDecl("C", ["A"], True, [AstAttribute("foo", [AstNumber(4)])])),
+            ("type { :foo \"boo\" } finite C A;", AstTypeConstructorDecl("C", ["A"], True, [AstAttribute("foo", ["boo"])])),
+        ]
+        for (text, expectedAst) in good:
+            try:
+                t = (astBuilder.Decl + StringEnd()).parseString(text)[0]
+            except ParseException:
+                print("Failed parsing", text)
+                raise
+            assert t == expectedAst, "Expected: {} got {}".format(expectedAst, t)

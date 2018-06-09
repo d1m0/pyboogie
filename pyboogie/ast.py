@@ -109,6 +109,13 @@ class AstBinExpr(AstExpr):
         return "(" + str(s.lhs) + " " + str(s.op) + " " + str(s.rhs) + ")"
 
 @attrs(frozen=True)
+class AstAttribute(AstNode):
+    name = attrib(type=str)
+    args = attrib(type=List[Union[str, AstExpr]])
+    def __str__(s) -> str:
+        return "{ :" + s.name + " " + ",".join(map(str, s.args)) + "}"
+
+@attrs(frozen=True)
 class AstBinding(AstNode):
     names = attrib(type=List[str])
     typ = attrib(type=AstType)
@@ -179,6 +186,7 @@ class AstBody(AstNode):
                 "\n".join([str(x) for x in s.stmts]) + \
                 "\n}"
 
+# Declarations
 class AstDecl(AstNode): pass
 
 @attrs(frozen=True)
@@ -192,6 +200,17 @@ class AstImplementation(AstDecl):
             ",".join(map(str,s.parameters)) + ") " +\
             ("returns (" + ",".join(map(str,s.returns)) + ")" if (len(s.returns) != 0) else "") +\
             str(s.body)
+
+@attrs(frozen=True)
+class AstTypeConstructorDecl(AstDecl):
+    name = attrib(type=str)
+    formals = attrib(type=List[str])
+    isFinite = attrib(type=bool)
+    attributes = attrib(type=List[AstAttribute])
+    def __str__(s) -> str:
+        return "type " + " ".join(map(str, s.attributes)) +\
+            (" finite" if s.isFinite else " ") +\
+            s.name + " " + " ".join(s.formals) + ";"
 
 # Programs
 @attrs(frozen=True)
@@ -277,6 +296,20 @@ class AstBuilder(BoogieParser[AstNode]):
     assert isinstance(toks[-1], AstType)
     return [ AstBinding(list(map(str, toks[:-1])), toks[-1]) ]
 
+  def onTypeConstructorDecl(s, prod: PE, st: str, loc: int, toks: PR) -> Iterable[AstNode]:
+    return [ AstTypeConstructorDecl(
+                ccast(toks[2], AstId).name,
+                [x.name for x in clcast(toks[3], AstId)],
+                (len(toks[1]) != 0),
+                clcast(toks[0], AstAttribute))]
+
+  def onAttribute(s, prod: PE, st: str, loc: int, toks: PR) -> Iterable[AstNode]:
+    args : List[Union[str, AstExpr]] = []
+    for x in toks[1]:
+        assert (isinstance(x, str) or isinstance(x, AstExpr))
+        args.append(x)
+    return [ AstAttribute(ccast(toks[0], AstId).name, args) ]
+
   # Statements
   def onAssert(s, prod: PE, st: str, loc: int, toks: PR) -> Iterable[AstNode]:
     assert (len(toks) == 1 and isinstance(toks[0], AstExpr))
@@ -345,6 +378,7 @@ class AstBuilder(BoogieParser[AstNode]):
     assert len(type_args) == 0, "NYI: Imeplementation type args: {}".format(type_args)
     body = toks[3][0]  # type: AstBody
     return [ AstImplementation(name, listify(parameters), listify(returns), body) ]
+
   def onLabeledStatement(s, prod: PE, st: str, loc: int, toks: PR) -> Iterable[AstNode]:
     label = str(toks[0]) # type: LabelT
     if (len(toks) == 1):

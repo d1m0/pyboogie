@@ -4,7 +4,8 @@ from typing import List, Union, Pattern, Any, Callable, Optional as Opt, \
 T = TypeVar("T")
 ParseAction = Callable[[str, int, ParseResults[Any]], Iterable[T]]
 
-# TODO: More accurate modelling of ParseErrors
+class ParseException(Exception): ...
+
 class ParseResults(Generic[T]):
   def __getitem__(self, x:  Union[int, slice]) -> T:  ...
   def __len__(self) -> int: ...

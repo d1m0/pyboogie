@@ -28,6 +28,7 @@ class BoogieParser(Generic[T]):
   def onHavoc(s, prod: "ParserElement[T]", st: str, loc: int, toks:"ParseResults[T]") -> "Iterable[T]": raise Exception("NYI")
   def onProgram(s, prod: "ParserElement[T]", st: str, loc: int, toks:"ParseResults[T]") -> "Iterable[T]": raise Exception("NYI")
   def onImplementationDecl(s, prod: "ParserElement[T]", st: str, loc: int, toks:"ParseResults[T]") -> "Iterable[T]": raise Exception("NYI")
+  def onTypeConstructorDecl(s, prod: "ParserElement[T]", st: str, loc: int, toks:"ParseResults[T]") -> "Iterable[T]": raise Exception("NYI")
   def onBody(s, prod: "ParserElement[T]", st: str, loc: int, toks:"ParseResults[T]") -> "Iterable[T]": raise Exception("NYI")
   def onLocalVarDecl(s, prod: "ParserElement[T]", st: str, loc: int, toks:"ParseResults[T]") -> "Iterable[T]": raise Exception("NYI")
   def onPrimitiveType(s, prod: "ParserElement[T]", st: str, loc: int, toks:"ParseResults[T]") -> "Iterable[T]": raise Exception("NYI")
@@ -40,6 +41,7 @@ class BoogieParser(Generic[T]):
   def onFunAppArgs(s, prod: "ParserElement[T]", st: str, loc: int, toks:"ParseResults[T]") -> "Iterable[T]": raise Exception("NYI")
   def onQuantified(s, prod: "ParserElement[T]", st: str, loc: int, toks:"ParseResults[T]") -> "Iterable[T]": raise Exception("NYI")
   def onBinding(s, prod: "ParserElement[T]", st: str, loc: int, toks:"ParseResults[T]") -> "Iterable[T]": raise Exception("NYI")
+  def onAttribute(s, prod: "ParserElement[T]", st: str, loc: int, toks:"ParseResults[T]") -> "Iterable[T]": raise Exception("NYI")
   def onAtom(s, prod: "ParserElement[T]", st: str, loc: int, toks:"ParseResults[T]") -> "Iterable[T]": raise Exception("NYI")
   def onUnaryOp(s, prod: "ParserElement[T]", st: str, loc: int, toks:"ParseResults[T]") -> "Iterable[T]": raise Exception("NYI")
   def onLABinOp(s, prod: "ParserElement[T]", st: str, loc: int, toks:"ParseResults[T]") -> "Iterable[T]": raise Exception("NYI")
@@ -111,7 +113,7 @@ class BoogieParser(Generic[T]):
     s.ParentEdge = O(s.UNIQUE) + s.Id
     s.ParentInfo = S("<:") + csl(s.ParentEdge)
     s.OrderSpec = O(s.ParentInfo) + O(s.COMPLETE)
-    s.StringLiteral = F(); # TODO
+    s.StringLiteral = S(L("\"")) + R("[^\"]*") + S(L("\""))
     s.Trigger = F(); # TODO
 
     ####### Expressions
@@ -135,7 +137,8 @@ class BoogieParser(Generic[T]):
 
     ####### Attributes
     s.AttrArg = s.Expr | s.StringLiteral
-    s.Attribute = s.LBRAC + s.COLN + s.Id + csl(s.AttrArg) + s.RBRAC
+    s.Attribute = S(s.LBRAC) + S(s.COLN) + s.Id + G(csl(s.AttrArg)) + S(s.RBRAC)
+    s.Attribute.setParseAction(lambda st, loc, toks: s.onAttribute(s.Attribute, st, loc, toks))
     s.AttrList = ZoM(s.Attribute)
 
     ####### Types
@@ -163,7 +166,9 @@ class BoogieParser(Generic[T]):
     s.IdsType.setParseAction(lambda st, loc, toks: s.onBinding(s.Type, st, loc, toks))
 
     ####### Type Declarations
-    s.TypeConstructor = s.TYPE + s.AttrList + O(s.FINITE) + OoM(s.Id) + s.SEMI
+    s.TypeConstructor = S(s.TYPE) + G(s.AttrList) + G(O(s.FINITE)) + s.Id + G(ZoM(s.Id)) + S(s.SEMI)
+    s.TypeConstructor.setParseAction(
+            lambda st, loc, toks:  s.onTypeConstructorDecl(s.TypeConstructor, st, loc, toks))
     s.TypeSynonym = s.TYPE + s.AttrList + OoM(s.Id) + s.EQ + s.Type + s.SEMI
     s.TypeDecl = s.TypeConstructor | s.TypeSynonym
 
@@ -239,17 +244,17 @@ class BoogieParser(Generic[T]):
     s.FArg = s.FArgName + s.Type
     s.FSig = O(s.TypeArgs) + s.LPARN + csl(s.FArg) + \
             s.RPARN + s.RETURNS + s.LPARN + s.FArg + s.RPARN
-    s.FunctionDecl = s.FUNCTION + ZoM(s.Attribute) + s.Id + s.FSig + s.SEMI |\
-                     s.FUNCTION + ZoM(s.Attribute) + s.Id + s.FSig + s.SEMI +\
+    s.FunctionDecl = s.FUNCTION + s.AttrList + s.Id + s.FSig + s.SEMI |\
+                     s.FUNCTION + s.AttrList + s.Id + s.FSig + s.SEMI +\
                         s.LBRAC + s.Expr + s.RBRAC
 
     ####### Axiom Declarations
-    s.AxiomDecl = s.AXIOM + ZoM(s.Attribute) + s.Expr
+    s.AxiomDecl = s.AXIOM + s.AttrList + s.Expr
 
     s.WhereClause = F() # TODO
 
     s.IdsTypeWhere = s.IdsType + O(s.WhereClause)
-    s.VarDecl = s.VAR + ZoM(s.Attribute) + s.IdsTypeWhere
+    s.VarDecl = s.VAR + s.AttrList + s.IdsTypeWhere
 
     ####### Procedure Declarations
     s.Spec =  O(s.FREE) + s.REQUIRES + s.Expr + s.SEMI \
@@ -261,7 +266,7 @@ class BoogieParser(Generic[T]):
             s.RPARN + O(s.OutParameters)
 
 
-    s.LocalVarDecl = S(s.VAR) + ZoM(s.Attribute) + csl(s.IdsTypeWhere) + \
+    s.LocalVarDecl = S(s.VAR) + s.AttrList + csl(s.IdsTypeWhere) + \
             S(s.SEMI) # type: ParserElement[T]
     s.LocalVarDecl.setParseAction(
             lambda st, loc, toks: s.onLocalVarDecl(s.LocalVarDecl,
@@ -344,26 +349,26 @@ class BoogieParser(Generic[T]):
     s.Body.setParseAction(lambda st, loc, toks: s.onBody(s.Body, st, loc, toks))
 
     s.ProcedureDecl = \
-        s.PROCEDURE + ZoM(s.Attribute) + s.Id + s.PSig + s.SEMI + ZoM(s.Spec) |\
-        s.PROCEDURE + ZoM(s.Attribute) + s.Id + s.PSig + ZoM(s.Spec) + s.Body
+        s.PROCEDURE + s.AttrList + s.Id + s.PSig + s.SEMI + ZoM(s.Spec) |\
+        s.PROCEDURE + s.AttrList + s.Id + s.PSig + ZoM(s.Spec) + s.Body
 
     s.IOutParameters = S(s.RETURNS) + S(s.LPARN) + csl(s.IdsType) + S(s.RPARN)
     s.ISig = G(O(s.TypeArgs)) + S(s.LPARN) + G(O(csl(s.IdsType))) + S(s.RPARN) +\
             G(O(s.IOutParameters))
-    s.ImplementationDecl = S(s.IMPLEMENTATION) + G(ZoM(s.Attribute)) + s.Id +\
+    s.ImplementationDecl = S(s.IMPLEMENTATION) + G(s.AttrList) + s.Id +\
             G(s.ISig) + G(ZoM(s.Body)) # type: ParserElement[T]
     s.ImplementationDecl.setParseAction(
       lambda st, loc, toks: s.onImplementationDecl(s.ImplementationDecl,
                                                    st, loc, toks))
 
 
-    s.Decl = s.TypeDecl |\
+    s.Decl : ParserElement[T] = s.TypeDecl |\
              s.ConstantDecl |\
              s.FunctionDecl |\
              s.AxiomDecl |\
              s.VarDecl |\
              s.ProcedureDecl |\
-             s.ImplementationDecl # type: ParserElement[T]
+             s.ImplementationDecl
 
     s.Program = ZoM(s.Decl) # type: ParserElement[T]
     s.Program.setParseAction(
