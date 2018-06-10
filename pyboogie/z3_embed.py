@@ -46,8 +46,9 @@ def type_to_z3sort(ast_typ: AstType) -> z3.SortRef:
     elif isinstance(ast_typ, AstBoolType):
         return BoolSort()
     else:
-        assert isinstance(ast_typ, AstMapType)
-        return z3.ArraySort(type_to_z3sort(ast_typ.domainT), type_to_z3sort(ast_typ.rangeT))
+        # TODO: Multi-dimensional maps NYI
+        assert isinstance(ast_typ, AstMapType) and len(ast_typ.domainT) == 1
+        return z3.ArraySort(type_to_z3sort(ast_typ.domainT[0]), type_to_z3sort(ast_typ.rangeT))
 
 def type_to_z3(ast_typ: AstType) -> Z3ValFactory_T:
     if isinstance(ast_typ, AstIntType):
@@ -56,8 +57,9 @@ def type_to_z3(ast_typ: AstType) -> Z3ValFactory_T:
         return Bool
     else:
         def array_fac(name: str) -> z3.ArrayRef:
-            assert isinstance(ast_typ, AstMapType)
-            return z3.Array(name, type_to_z3sort(ast_typ.domainT), type_to_z3sort(ast_typ.rangeT))
+            # TODO: Multi-dimensional maps NYI
+            assert isinstance(ast_typ, AstMapType) and len(ast_typ.domainT) == 1
+            return z3.Array(name, type_to_z3sort(ast_typ.domainT[0]), type_to_z3sort(ast_typ.rangeT))
         return array_fac
 def get_typeenv(f: bb_Function) -> TypeEnv_T:
     return dict((name, type_to_z3(ast_typ)) for (name, ast_typ) in list(f.parameters) + list(f.locals) + list(f.returns))
@@ -501,7 +503,7 @@ def expr_to_z3(expr: AstExpr, typeEnv: TypeEnv_T) -> z3.ExprRef:
     elif isinstance(expr, AstFuncExpr):
         params = list(map((lambda p : expr_to_z3(p, typeEnv)), expr.ops))
         intsort = list(map((lambda p : z3.IntSort(ctx=getCtx())), expr.ops)) + [z3.IntSort(ctx=getCtx())]
-        f = Function(expr.funcName.name, *intsort)
+        f = Function(expr.funcName, *intsort)
         return f(*params)
     elif isinstance(expr, AstUnExpr):
         z3_inner = expr_to_z3(expr.expr, typeEnv)
@@ -670,8 +672,7 @@ def z3_expr_to_boogie(expr: z3.ExprRef) -> AstExpr:
         if assoc == "func":
             try:
                 pars = list(map(z3_expr_to_boogie, c))
-                func = AstId(boogie_op)
-                fun = AstFuncExpr(func, pars)
+                fun = AstFuncExpr(boogie_op, pars)
             except Exception as ex:
                 error(str(ex))
             return fun
