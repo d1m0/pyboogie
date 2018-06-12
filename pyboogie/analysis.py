@@ -16,55 +16,68 @@ TransformerT = Callable[[AstStmt, StateT], StateT]
 TransformerMapT = Dict[type, TransformerT]
 UnionT = Callable[[StateT, StateT], StateT]
 # DataFlow state is a mapping from program location to state at that location
-# For a BB 'A', and a state S: DFlowStateT, S['A', 0] described the state
+# For a BB 'A', and a state S, S['A', 0] described the state
 # before the first instruction in 'A'. If 'A' has n instructions S['A', n-1]
 # described the state before the last instruction in 'A' and S['A', n]
 # describes the state after it - i.e. the state after 'A' completes.
 DFlowStateT = Dict[LocT, StateT]
 
-def dataflow(fun: Function, transformerMap: TransformerMapT, unionF: UnionT, bottom: StateT, forward: bool) -> DFlowStateT:
+def dataflow(fun: Function, transformerMap: TransformerMapT, unionF: UnionT, bottom: StateT, start: StateT, forward: bool) -> DFlowStateT:
     # Start with all locations mapped to bottom
-    state = { (bb, idx): copy(bottom) for bb in fun.bbs() for idx in range(len(bb))} # type: DFlowStateT
+    state = { (bb, idx): copy(bottom) for bb in fun.bbs() for idx in range(len(bb)+1)} # type: DFlowStateT
 
     # Compute the first entry on the worklist - entry or exit of CFG depending on forward argument
     if (forward):
         entryLoc = (fun.entry(), 0)
+        wList = [ (bb, (0 if forward else len(bb))) for bb in fun.bbs_preorder() ]
     else:
         exitBl = fun.exit()
         entryLoc = (exitBl, len(exitBl))
-    wList = [ entryLoc ]
+        wList = [ (bb, (0 if forward else len(bb))) for bb in fun.bbs_rpo() ]
+
+    state[entryLoc] = start
+
+    inList = set(wList)
 
     nextLocsFunc = nextLocations if forward else prevLocations # type: Callable[[LocT], List[LocT]]
 
     while len(wList) > 0:
         curLoc = wList.pop()
+        inList.remove(curLoc)
+
         curBB, curIdx = curLoc
         inState = state[curLoc]
         outLabels = nextLocsFunc(curLoc)
+        stmt : Optional[AstStmt] = None
 
-        if ((curIdx == len(curBB) and forward) or
-            (curIdx == 0 and not forward)):
-            # Propagating new state across edges between BBs. No instruction is executed
-            outState = inState
-        else:
-            # Propagating new state across an instruction inside a BB. Run the transformer function
+        if (forward and curIdx < len(curBB)):
+            stmt = curBB[curIdx]
+        elif (not forward and curIdx > 0):
+            stmt = curBB[curIdx-1]
+
+        if (stmt is not None):
+            # Propagating new state across a stmt inside a BB. Run the transformer function
             assert(len(outLabels) == 1)
-            curStmt = curBB[curIdx]
-            outState = transformerMap[curStmt.__class__](curStmt, inState)
+            outState = transformerMap[stmt.__class__](stmt, inState)
+            nextLoc : LocT = unique(outLabels)
+            if (state[nextLoc] != outState):
+                state[nextLoc] = outState
+                if (nextLoc not in inList):
+                    wList.append(nextLoc)
+                    inList.add(nextLoc)
+        else:
+            # Propagating new state across edges between BBs.
+            outState = inState
+            for l in outLabels:
+                updatedOutState = unionF(state[l], outState)
 
-        for l in outLabels:
-            updatedOutState = unionF(state[l], outState)
-
-            if (updatedOutState != state[l]):
-                state[l] = updatedOutState 
-                wList.append(l)
+                if (updatedOutState != state[l]):
+                    state[l] = updatedOutState
+                    if (l not in inList):
+                        wList.append(l)
+                        inList.add(l)
 
     return state
-
-T=TypeVar("T")
-Transformer_T = Dict[type, Callable[[AstStmt, Set[T]], Set[T]]]
-Union_T = Callable[[Iterable[Set[T]]], Set[T]]
-DFlowState_T = Dict[LabelT, Set[T]]
 
 LiveVarsState = Set[str]
 def livevars(fun: Function) -> DFlowStateT[LiveVarsState]:
@@ -77,37 +90,47 @@ def livevars(fun: Function) -> DFlowStateT[LiveVarsState]:
         AstHavoc:  lambda stmt, inS: inS - stmt_changed(stmt),
         AstAssignment:  lambda stmt, inS:   \
             (inS - stmt_changed(stmt)).union(stmt_read(stmt))
-    } # type: TransformerMapT
-    def union_f(a: LiveVarsState, b: LiveVarsState) -> LiveVarsState:
-        return a.union(b)
-    return dataflow(fun, transformer_m, union_f, set(), False)
+    }
 
-PredicateSetT = Set[AstExpr]
+    return dataflow(fun, transformer_m, lambda a,b: a.union(b), set(), set([v[0] for v in fun.returns]), False)
+
+PredicateSetT = Optional[Set[AstExpr]]
 def propagateUnmodifiedPreds(fun: Function) -> DFlowStateT[PredicateSetT]:
-    """ Propagate assume and "==" predicates through the function, as long as
-        any of the variables they use are not overwritten.
+    """ Propagate predicates through the function, as long as we can
+        syntactically tell they still hold. This requires checking that any of
+        the variables they use are not overwritten, since the location where they
+        are defined. Our predicates come from 3 sources:
+            1) Function pre-conditions
+            2) assume statements (e.g. assume (x>0) produces x>0)
+            3) assignments (e.g. x:= y+1 produces x == y+1)
     """
-    def assignment_preds(stmt: AstAssignment) -> PredicateSetT:
+    def assignment_preds(stmt: AstAssignment) -> Set[AstExpr]:
       """ Compute predicate x = expr from assignment x:=expr if x is not in expr """
       assert isinstance(stmt.lhs, AstId) # m[X] := ..; re-writen to m = update(m, x, ...)
       return set([AstBinExpr(stmt.lhs, "==", stmt.rhs)]) \
         if str(stmt.lhs) not in expr_read(stmt.rhs) else set()
 
-    def filterModifiedPreds(preds: PredicateSetT, clobbered_vars: Set[str]) -> PredicateSetT: 
+    def filterModifiedPreds(preds: PredicateSetT, stmt: AstStmt) -> Set[AstExpr]: 
       """ Remove predicates using any of the clobbered_vars """
+      clobbered_vars: Set[str] = stmt_changed(stmt)
+      assert preds is not None
       return set([x for x in preds \
                     if len(clobbered_vars.intersection(expr_read(x))) == 0])
 
     transformer_m = {
         AstAssert:  lambda stmt, inS: inS,
         AstAssume:  lambda stmt, inS: inS.union(set([stmt.expr])),
-        AstHavoc:  lambda stmt, inS: filterModifiedPreds(inS, stmt_changed(stmt)),
+        AstHavoc:  lambda stmt, inS: filterModifiedPreds(inS, stmt),
         AstAssignment:  lambda stmt, inS:
-            filterModifiedPreds(inS, stmt_changed(stmt)).union(assignment_preds(stmt))
+            filterModifiedPreds(inS, stmt).union(assignment_preds(stmt))
     }
 
-    # TODO: Types seem weird here. Not clear why I need None. Needs TLC
-    def union_f(a: PredicateSetT, b: PredicateSetT) -> PredicateSetT:
-        return a.union(b)
+    def unionF(a: PredicateSetT, b: PredicateSetT) -> PredicateSetT:
+        if (a is None): return b
+        if (b is None): return a
 
-    return dataflow(fun, transformer_m, union_f, set(), True)
+        return a.intersection(b)
+
+    # TODO: Once support for procedures with bodies is added, (and thus pre/post conditions added to Function class)
+    # modify start set to include function precondition
+    return dataflow(fun, transformer_m, unionF, None, set(), True)

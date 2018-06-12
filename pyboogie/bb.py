@@ -246,6 +246,36 @@ class Function(object):
     def bbs(self) -> Iterable[BB]:
         return self._bbs.values()
 
+    def bbs_preorder(self, bb: Optional[BB] = None, visited = None) -> Iterable[BB]:
+        if (bb is None):
+            bb = self.entry()
+            visited = set()
+
+        yield bb
+
+        visited.add(bb)
+        for child in bb.successors():
+            if (child not in visited):
+                self.bbs_preorder(child, visited)
+
+
+    def bbs_postorder(self, bb: Optional[BB] = None, visited: Optional[Set[BB]] = None) -> Iterable[BB]:
+        if (bb is None):
+            bb = self.entry()
+        if (visited is None):
+            visited = set()
+
+        visited.add(bb)
+        for child in bb.successors():
+            if (child not in visited):
+                for t in self.bbs_postorder(child, visited):
+                    yield t
+
+        yield bb
+
+    def bbs_rpo(self) -> Iterable[BB]:
+        return reversed(list(self.bbs_postorder()))
+
     def get_bb(self, label: LabelT) -> BB:
         return self._bbs[label]
 

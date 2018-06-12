@@ -10,7 +10,7 @@ from ..bb import BB, Function, Bindings_T
 from typing import Any, List
 from functools import reduce
 
-class TestAst(TestCase):
+class TestBB(TestCase):
     testProgs = [
         (# Empty program
             """
