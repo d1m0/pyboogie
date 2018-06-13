@@ -1,0 +1,50 @@
+High-level TODO:
+- read "This is boogie 2" and make careful notes on:
+    - parametric polymorphism, types modeling etc..
+    - update grammar/ast/interp to as I go through
+    - add explicit type-checking pass?
+
+Concrete TODO:
+TODOs for 
+>>> 
+
+TODOs for supporting more of language:
+    - where do we check saneness of the 5 namespace constraints (types, var+consts, functions, procedures, attributes)? do we need to keep track of all of them?
+    - add attributes to AST nodes for: "local-variable declaration, assert and assume statement,
+        procedure specification clause, loop invariant, and quantifier" and 
+    - add triggers to quantifier ASTs
+    - for map types, as part of type-checking check that any type var is mentioned in the domain type.
+    - check type vars in Map type def are distinct
+    - fix paths to be list of Locs == (BB, idx)
+    - Change LabelT to Union[str, int]
+    - rename FuncInterp to MapVal, decide how to specify these values
+    - maybe remove eval.py? Seems like old code
+
+Book-keeping
+    - make a note somewhere grammar doesn't yet support Unicode
+    - fix all function/var cases to caml case
+    - convert all variable "# type: .." annotations to ": Type"
+    - check Pep-8 compliance
+    - Once support for Procedures is added, should we re-name Function class to Procedure?
+    - Add integration testing
+    - rename ssa.py to ssa_env.py to better reflect contents
+    - add tests for filterInvariantNetworks
+
+Re-write cleanup TODOS:
+    - re-write z3_embed and perhaps make it independent from z3 (make everything agnosting to SMT, use smtlib2 library instead?)
+    - remove pyro dependency
+    - fix the nondet path types mess - too complex right now
+    - after paths become list of locs rather than bbs, simplify invariant networks.py
+
+4. Factor out SMT generation so its modular (can substitute any SMT inside)
+5. Remove out-of-process z3 (and pyro dependency).
+6. Remove unnecessary utils?
+
+Testing notes:
+
+Needs:
+pyboogie/interp.py  - rename/simplify FuncInterp. Need better modelling for maps and polymorphic types.
+
+Re-write/simplify:
+pyboogie/paths.py    - simplify paths?
+pyboogie/z3_embed.py  - remove Pyro dependency?
