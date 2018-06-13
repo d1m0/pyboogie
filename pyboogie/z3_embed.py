@@ -401,7 +401,7 @@ def BoolVal(v: bool) -> z3.BoolRef:
     return z3.BoolVal(v, ctx=getCtx())
 
 
-def counterex(pred: z3.ExprRef, timeout: Optional[int]=None, comm: str ="") -> Store:
+def counterex(pred: z3.ExprRef, timeout: Optional[int]=None, comm: str ="") -> Optional[Store]:
     s = None
     try:
         s = getSolver()
@@ -414,7 +414,6 @@ def counterex(pred: z3.ExprRef, timeout: Optional[int]=None, comm: str ="") -> S
                 continue
             break
 
-        assert(m is not None)
         return m
     finally:
         if (s):

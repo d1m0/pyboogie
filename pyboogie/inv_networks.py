@@ -157,7 +157,7 @@ def filterCandidateInvariants(fun: Function, preCond: AstExpr, postCond: AstExpr
                 except Unknown:
                   c = { } # On timeout conservatively assume fail
 
-                if (c != None):
+                if (c is not None):
                   v = Violation("inductiveness",
                                 NondetSSAPath(path + [SSABBNode( succ, [])]),
                                 [],
@@ -217,7 +217,7 @@ def checkInvNetwork(fun: Function, preCond: AstExpr, postCond: AstExpr, cutPoint
               #print ("Done")
             except Unknown:
               c = { } # On timeout conservatively assume fail
-            if (c != None):
+            if (c is not None):
               # Current path can violate assertion
               v = Violation("safety", path, processedStmts + [(s, replM)],
                             Implies(sp, expr_to_z3(s.expr, tenv)),
@@ -251,7 +251,7 @@ def checkInvNetwork(fun: Function, preCond: AstExpr, postCond: AstExpr, cutPoint
             #print ("Done")
           except Unknown:
             c = { } # On timeout conservatively assume fail
-          if (c != None):
+          if (c is not None):
             v = Violation("safety",
                           path,
                           processedStmts,
@@ -285,7 +285,7 @@ def checkInvNetwork(fun: Function, preCond: AstExpr, postCond: AstExpr, cutPoint
                 except Unknown:
                   c = { } # On timeout conservatively assume fail
               #print ("Done")
-              if (c != None):
+              if (c is not None):
                 v = Violation("inductiveness",
                   NondetSSAPath(path + [SSABBNode(succ, [])]),
                   [],
