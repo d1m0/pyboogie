@@ -19,8 +19,10 @@ class AstNode:
 class AstType(AstNode): pass
 # Builtin Types
 class AstBuiltinType(AstType): pass
+@attrs(frozen=True)
 class AstIntType(AstBuiltinType):
     def __str__(s) -> str: return "int"
+@attrs(frozen=True)
 class AstBoolType(AstBuiltinType):
     def __str__(s) -> str: return "bool"
 @attrs(frozen=True)
@@ -46,9 +48,11 @@ class AstCompoundType(AstType):
 
 # Expressions
 class AstExpr(AstNode): pass
+@attrs(frozen=True)
 class AstFalse(AstExpr):
     def __str__(s) -> str: return "false"
 
+@attrs(frozen=True)
 class AstTrue(AstExpr):
     def __str__(s) -> str: return "true"
 
