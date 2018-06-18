@@ -14,7 +14,7 @@ setuptools.setup(
 #    long_description_content_type="text/markdown",
     url="https://github.com/d1m0/pyboogie",
     packages=setuptools.find_packages(),
-    install_requires=["z3-solver", "pyparsing", "mypy", "frozendict", "pyro4"],
+    install_requires=["z3-solver", "pyparsing", "mypy", "frozendict", "pyro4", "attrs"],
     python_requires=">=3",
     classifiers=(
         "Programming Language :: Python :: 3",
