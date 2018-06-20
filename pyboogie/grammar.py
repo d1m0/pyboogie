@@ -137,7 +137,7 @@ class BoogieParser(Generic[T]):
 
     ####### Attributes
     s.AttrArg = s.Expr | s.StringLiteral
-    s.Attribute = S(s.LBRAC) + S(s.COLN) + s.Id + G(csl(s.AttrArg)) + S(s.RBRAC)
+    s.Attribute = S(s.LBRAC) + S(s.COLN) + s.Id + G(O(csl(s.AttrArg))) + S(s.RBRAC)
     s.Attribute.setParseAction(lambda st, loc, toks: s.onAttribute(s.Attribute, st, loc, toks))
     s.AttrList = ZoM(s.Attribute)
 
@@ -293,7 +293,7 @@ class BoogieParser(Generic[T]):
     s.AssertStmt = S(s.ASSERT) + s.Expr + S(s.SEMI) # type: ParserElement[T]
     s.AssertStmt.setParseAction(
             lambda st, loc, toks: s.onAssert(s.AssertStmt, st, loc, toks))
-    s.AssumeStmt = S(s.ASSUME) + O(S("{:partition}")) + s.Expr + S(s.SEMI) # type: ParserElement[T]
+    s.AssumeStmt = S(s.ASSUME) + G(s.AttrList) + s.Expr + S(s.SEMI) # type: ParserElement[T]
     s.AssumeStmt.setParseAction(
             lambda st, loc, toks: s.onAssume(s.AssumeStmt, st, loc, toks))
     s.ReturnStmt = S(s.RETURN) + S(s.SEMI) # type: ParserElement[T]

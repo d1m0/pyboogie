@@ -121,14 +121,14 @@ class AstAttribute(AstNode):
 
 @attrs(frozen=True)
 class AstBinding(AstNode):
-    names = attrib(type=List[str])
+    names = attrib(type=Tuple[str,...])
     typ = attrib(type=AstType)
     def __str__(s) -> str: return ",".join(map(str, s.names)) + " : " + str(s.typ)
 
 
 @attrs(frozen=True)
 class AstForallExpr(AstExpr):
-    bindings = attrib(type=List[AstBinding])
+    bindings = attrib(type=Tuple[AstBinding,...])
     expr = attrib(type=AstExpr)
     def __str__(s) -> str:
         return "(forall " + ",".join(map(str, s.bindings)) + " :: " + \
@@ -298,7 +298,7 @@ class AstBuilder(BoogieParser[AstNode]):
 
   def onBinding(s, prod: PE, st: str, loc: int, toks: PR) -> Iterable[AstNode]:
     assert isinstance(toks[-1], AstType)
-    return [ AstBinding(list(map(str, toks[:-1])), toks[-1]) ]
+    return [ AstBinding(tuple(map(str, toks[:-1])), toks[-1]) ]
 
   def onTypeConstructorDecl(s, prod: PE, st: str, loc: int, toks: PR) -> Iterable[AstNode]:
     return [ AstTypeConstructorDecl(
@@ -319,8 +319,9 @@ class AstBuilder(BoogieParser[AstNode]):
     assert (len(toks) == 1 and isinstance(toks[0], AstExpr))
     return [ AstAssert(toks[0]) ]
   def onAssume(s, prod: PE, st: str, loc: int, toks: PR) -> Iterable[AstNode]:
-    assert (len(toks) == 1 and isinstance(toks[0], AstExpr))
-    return [ AstAssume(toks[0]) ]
+    assert (len(toks) == 2)
+    # TODO: Don't ignore attribute list
+    return [ AstAssume(ccast(toks[1], AstExpr)) ]
   def onReturn(s, prod: PE, st: str, loc: int, toks: PR) -> Iterable[AstNode]:
     assert (len(toks) == 0)
     return [ AstReturn() ]
@@ -409,7 +410,7 @@ class AstBuilder(BoogieParser[AstNode]):
         bindings.append(node)
     expr = toks[2]
     assert quantifier == "forall", "Existential quantification NYI"
-    return [AstForallExpr(bindings, ccast(expr, AstExpr))]
+    return [AstForallExpr(tuple(bindings), ccast(expr, AstExpr))]
 
 astBuilder = AstBuilder()
 
