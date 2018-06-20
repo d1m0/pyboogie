@@ -64,7 +64,7 @@ def store_to_expr(s: Store, suff:str ="") -> AstExpr:
             if val._default_case is not None:
               key = AstId("_key_")
               not_explicit = ast_and([AstBinExpr(key, "!=", x) for x in explicit_vals])
-              exprs.append(AstForallExpr([AstBinding(["_key_"], AstIntType())],
+              exprs.append(AstForallExpr((AstBinding(("_key_",), AstIntType()),),
                                      AstBinExpr(not_explicit, "==>",
                                                 AstBinExpr(AstMapIndex(AstId(var + suff), key), "==", val._default_case))))
         else:

@@ -27,7 +27,7 @@ class TestAst(TestCase):
             """,
             AstProgram([
                 AstImplementation("main", [], [],
-                    AstBody([AstBinding(["x"], AstIntType())], []))])
+                    AstBody([AstBinding(("x",), AstIntType())], []))])
         ),
         (
             """
@@ -38,7 +38,7 @@ class TestAst(TestCase):
             """,
             AstProgram([
                 AstImplementation("main", [], [],
-                    AstBody([AstBinding(["x"], AstIntType())],
+                    AstBody([AstBinding(("x",), AstIntType())],
                     [AstAssignment(AstId('x'), AstBinExpr(AstId("x"), "+", AstNumber(42)))]))])
         ),
 
