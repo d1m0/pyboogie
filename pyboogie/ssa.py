@@ -3,7 +3,7 @@ from .ast import AstId, AstNode, ReplMap_T
 from copy import copy, deepcopy
 from frozendict import frozendict
 from typing import Optional, Dict, List, TYPE_CHECKING
-from .z3_embed import TypeEnv_T, Z3ValFactory_T
+from .z3_embed import Z3TypeEnv, Z3ValFactory_T
 from .interp import Store
 
 class SSAEnv:
@@ -64,9 +64,9 @@ def unssa_z3_model(m: Store, repl_m: ReplMap_T) -> Store:
           }
     return frozendict(res)
 
-def get_ssa_tenv(tenv: TypeEnv_T) -> TypeEnv_T:
-    class SSATEnv(TypeEnv_T):
-        def __init__(self, inner: TypeEnv_T) -> None:
+def get_ssa_tenv(tenv: Z3TypeEnv) -> Z3TypeEnv:
+    class SSATEnv(Z3TypeEnv):
+        def __init__(self, inner: Z3TypeEnv) -> None:
             self._inner_env = inner
         def __getitem__(self, k: str) -> Z3ValFactory_T:
             if is_ssa_str(k):

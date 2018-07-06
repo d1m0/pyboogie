@@ -4,7 +4,7 @@ from .ast import AstType, AstIntType, AstBoolType, AstMapType, AstExpr,\
     AstNumber, AstTrue, AstFalse, AstId, AstNode, AstUnExpr, AstBinExpr,\
     AstFuncExpr, AstAssignment, AstAssert, AstAssume,\
     AstForallExpr, AstMapUpdate, AstMapIndex, AstLabel
-from .bb import Function as bb_Function
+from .bb import Function as bb_Function, TypeEnv as BoogieTypeEnv
 from .interp import BoogieVal, OpaqueVal, Store
 import z3
 
@@ -26,7 +26,7 @@ from signal import SIGINT, SIGKILL
 ctxHolder = local()
 
 Z3ValFactory_T = Callable[[str], z3.ExprRef]
-TypeEnv_T = Dict[str, Z3ValFactory_T]
+Z3TypeEnv = Dict[str, Z3ValFactory_T]
 
 def fi_deserialize(classname: str, d: Dict[Any, Any]) -> OpaqueVal:
     return OpaqueVal.from_dict(d)
@@ -61,8 +61,9 @@ def type_to_z3(ast_typ: AstType) -> Z3ValFactory_T:
             assert isinstance(ast_typ, AstMapType) and len(ast_typ.domainT) == 1
             return z3.Array(name, type_to_z3sort(ast_typ.domainT[0]), type_to_z3sort(ast_typ.rangeT))
         return array_fac
-def get_typeenv(f: bb_Function) -> TypeEnv_T:
-    return dict((name, type_to_z3(ast_typ)) for (name, ast_typ) in list(f.parameters) + list(f.locals) + list(f.returns))
+
+def boogieToZ3TypeEnv(env: BoogieTypeEnv) -> Z3TypeEnv:
+    return { name: type_to_z3(typ) for (name, typ) in env.items() }
 
 def z3val_to_boogie(v: Union[z3.ExprRef, z3.FuncInterp]) -> BoogieVal:
     if isinstance(v, z3.IntNumRef):
@@ -490,7 +491,7 @@ def _force_expr(a: Any) -> z3.ExprRef:
     assert isinstance(a, z3.ExprRef)
     return a
 
-def expr_to_z3(expr: AstExpr, typeEnv: TypeEnv_T) -> z3.ExprRef:
+def expr_to_z3(expr: AstExpr, typeEnv: Z3TypeEnv) -> z3.ExprRef:
     if isinstance(expr, AstNumber):
         return IntVal(expr.num)
     elif isinstance(expr, AstId):
@@ -580,7 +581,7 @@ def expr_to_z3(expr: AstExpr, typeEnv: TypeEnv_T) -> z3.ExprRef:
         raise Exception("Unknown expression " + str(expr))
 
 
-def stmt_to_z3(stmt: AstNode, typeEnv: TypeEnv_T) -> z3.ExprRef:
+def stmt_to_z3(stmt: AstNode, typeEnv: Z3TypeEnv) -> z3.ExprRef:
     if (isinstance(stmt, AstLabel)):
         stmt = stmt.stmt
 

@@ -8,6 +8,7 @@ from typing import Dict, List, Iterable, Tuple, Iterator, Any, Set, Optional
 from json import loads
 
 Bindings_T = List[Tuple[str, AstType]]
+TypeEnv = Dict[str, AstType]
 
 class BB(List[AstStmt]):
     def __init__(self, label: LabelT, predecessors: Iterable["BB"], stmts: Iterable[AstStmt], successors: Iterable["BB"], internal: bool = False) -> None:
@@ -431,3 +432,6 @@ class Function(object):
             (" returns({})".format(pp_bindings(self.returns)) if len(self.returns) > 0 else ""),
             pp_locals(self.locals),
             "\n\n".join(bb.pp() for bb in self._bbs.values()))
+
+    def getTypeEnv(self) -> TypeEnv:
+        return { name: typ for (name, typ) in self.parameters + self.returns + self.locals }

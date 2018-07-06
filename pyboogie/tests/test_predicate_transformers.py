@@ -7,7 +7,7 @@ from ..ast import parseAst, parseExprAst, AstExpr, AstStmt, parseStmt
 from ..bb import Function
 from ..predicate_transformers import wp_stmt, sp_stmt
 from functools import reduce
-from ..z3_embed import TypeEnv_T, getCtx, Int, IntVal, BoolVal, And, Implies
+from ..z3_embed import Z3TypeEnv, getCtx, Int, IntVal, BoolVal, And, Implies
 from ..util import ccast
 import z3
 
@@ -15,7 +15,7 @@ def _toExpr(a: Any) -> z3.ExprRef:
     return ccast(a, z3.ExprRef)
 
 class TestPredicateTransformers(TestCase):
-    testWPCases : List[Tuple[Any, str, Any, TypeEnv_T]] = [
+    testWPCases : List[Tuple[Any, str, Any, Z3TypeEnv]] = [
         (Int('y') == IntVal(4), "x:=y;", Int('x') == IntVal(4), {'x': Int, 'y': Int}),
         (Int('z') == IntVal(4), "x:=y;", Int('z') == IntVal(4), {'x': Int, 'y': Int}),
         (((Int('y') + IntVal(1)) == IntVal(4)), "x:=y+1;", Int('x') == IntVal(4), {'x': Int, 'y': Int}),
@@ -58,7 +58,7 @@ class TestPredicateTransformers(TestCase):
             # indices)
             sp_stmt(parseStmt("havoc x;"), BoolVal(True), {'x': Int})
 
-    testSPCases : List[Tuple[Any, str, Any, TypeEnv_T]] = [
+    testSPCases : List[Tuple[Any, str, Any, Z3TypeEnv]] = [
         (Int('y') == IntVal(4), "x:=y;", And(Int('x') == Int('y'), Int('y') == IntVal(4)), {'x': Int, 'y': Int}),
         (Int('z') == IntVal(4), "x:=y;", And(Int('x') == Int('y'), Int('z') == IntVal(4)), {'x': Int, 'y': Int, 'z': Int}),
         (Int('z') == IntVal(4), "x:=y+1;", And(Int('x') == (Int('y')+IntVal(1)), Int('z') == IntVal(4)), {'x': Int, 'y': Int, 'z': Int}),

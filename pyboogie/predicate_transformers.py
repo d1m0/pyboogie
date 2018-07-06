@@ -1,12 +1,12 @@
 from .ast import AstLabel, AstAssignment, AstAssert, AstAssume, \
         expr_read, AstStmt, AstId
-from .z3_embed import expr_to_z3, And, Implies, ids, TypeEnv_T, _force_expr
+from .z3_embed import expr_to_z3, And, Implies, ids, Z3TypeEnv, _force_expr
 from .util import ccast
 from collections import namedtuple
 import z3
 from typing import Iterable, Reversible
 
-def wp_stmt(stmt: AstStmt, pred: z3.ExprRef, typeEnv: TypeEnv_T) -> z3.ExprRef:
+def wp_stmt(stmt: AstStmt, pred: z3.ExprRef, typeEnv: Z3TypeEnv) -> z3.ExprRef:
     if (isinstance(stmt, AstLabel)):
         stmt = stmt.stmt
 
@@ -24,14 +24,14 @@ def wp_stmt(stmt: AstStmt, pred: z3.ExprRef, typeEnv: TypeEnv_T) -> z3.ExprRef:
     else:
         raise Exception("Cannot handle Boogie Statement: " + str(stmt))
 
-def wp_stmts(stmts: Reversible[AstStmt], pred: z3.ExprRef, typeEnv: TypeEnv_T) -> z3.ExprRef:
+def wp_stmts(stmts: Reversible[AstStmt], pred: z3.ExprRef, typeEnv: Z3TypeEnv) -> z3.ExprRef:
     for s in reversed(stmts):
         #old_pred = pred
         pred = wp_stmt(s, pred, typeEnv)
         #print "WP of ", old_pred, " w.r.t. ", s, " is ", pred
     return pred
 
-def sp_stmt(stmt: AstStmt, pred: z3.ExprRef, typeEnv: TypeEnv_T) -> z3.ExprRef:
+def sp_stmt(stmt: AstStmt, pred: z3.ExprRef, typeEnv: Z3TypeEnv) -> z3.ExprRef:
     if (isinstance(stmt, AstLabel)):
         stmt = stmt.stmt
 
@@ -50,7 +50,7 @@ def sp_stmt(stmt: AstStmt, pred: z3.ExprRef, typeEnv: TypeEnv_T) -> z3.ExprRef:
     else:
         raise Exception("Cannot handle Boogie Statement: " + str(stmt))
 
-def sp_stmts(stmts: Iterable[AstStmt], pred: z3.ExprRef, typeEnv: TypeEnv_T) -> z3.ExprRef:
+def sp_stmts(stmts: Iterable[AstStmt], pred: z3.ExprRef, typeEnv: Z3TypeEnv) -> z3.ExprRef:
     for s in stmts:
         pred = sp_stmt(s, pred, typeEnv)
     return pred

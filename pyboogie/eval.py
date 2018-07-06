@@ -1,6 +1,6 @@
 from .z3_embed import And, stmt_to_z3, satisfiable, Int,\
-    maybeModel, expr_to_z3, simplify, model, TypeEnv_T,\
-    _force_expr as _z3_force_expr, get_typeenv
+    maybeModel, expr_to_z3, simplify, model, Z3TypeEnv,\
+    _force_expr as _z3_force_expr, boogieToZ3TypeEnv
 from .ast import expr_read, AstAssume, AstAssert, replace, AstId,\
         AstNumber, AstExpr, AstStmt, ReplMap_T
 from .paths import nd_bb_path_to_ssa, \
@@ -27,7 +27,7 @@ def _to_dict(vs: List[T], vals: List[U]) -> Dict[T,U]:
     return { vs[i]: vals[i] for i in range(0, len(vs)) }
 
 def evalPred(boogie_expr: AstExpr, env: Store) -> bool:
-    typeEnv = { x : Int for x in env } # type: TypeEnv_T
+    typeEnv = { x : Int for x in env } # type: Z3TypeEnv
     q = And([stmt_to_z3(stmt, typeEnv) for stmt in [AstAssume(store_to_expr(env)),
          AstAssert(boogie_expr)]])
     res = satisfiable(q)
@@ -55,7 +55,7 @@ def instantiateAndEval(inv: AstExpr,
 
     typeEnv = { str(x) + str(i) : Int
                     for x in vals[0].keys()
-                    for i in range(len(vals)) } # type: TypeEnv_T
+                    for i in range(len(vals)) } # type: Z3TypeEnv
     typeEnv.update({ str(c) : Int for c in symConsts })
 
     for prm in prms:
@@ -82,7 +82,7 @@ def instantiateAndEval(inv: AstExpr,
     return res
 
 def execute(env: Store, bb: BB, fun: Function, limit: int) -> Iterator[Tuple[z3.ExprRef, SSAEnv, NondetPath, NondetSSAPath, NondetPathEnvs_T]]:
-    tenv = get_ssa_tenv(get_typeenv(fun))
+    tenv = get_ssa_tenv(boogieToZ3TypeEnv(fun.getTypeEnv()))
     q = [ (expr_to_z3(store_to_expr(env), tenv),
            bb ,
            SSAEnv(None, ""),

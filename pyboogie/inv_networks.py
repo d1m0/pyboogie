@@ -4,7 +4,7 @@ from .ast import ast_and, replace, AstBinExpr, AstAssert, AstAssume, \
 from .util import split, nonempty, powerset, ccast
 from .z3_embed import expr_to_z3, Unknown, counterex, \
         Implies, And, tautology, satisfiable, unsatisfiable, to_smt2,\
-        get_typeenv
+        boogieToZ3TypeEnv
 from .paths import nd_bb_path_to_ssa, _ssa_stmts,\
         NondetSSAPath, SSABBNode, NondetPath
 from .ssa import SSAEnv, unssa_z3_model, get_ssa_tenv
@@ -97,7 +97,7 @@ def filterCandidateInvariants(fun: Function, preCond: AstExpr, postCond: AstExpr
     # The separation in overfitted and nonind is well defined only in the
     # Single loop case. So for now only handle these. Can probably extend later
 
-    tenv = get_ssa_tenv(get_typeenv(fun))
+    tenv = get_ssa_tenv(boogieToZ3TypeEnv(fun.getTypeEnv()))
     cpWorkQ = set([ entryBB.label ] + list(cps.keys()))
 
     while (len(cpWorkQ) > 0):
@@ -193,7 +193,7 @@ def checkInvNetwork(fun: Function, preCond: AstExpr, postCond: AstExpr, cutPoint
     cps = copy(cutPoints)
     entryBB = fun.entry()
     cps[entryBB.label] = set([ preCond ])
-    tenv = get_ssa_tenv(get_typeenv(fun))
+    tenv = get_ssa_tenv(boogieToZ3TypeEnv(fun.getTypeEnv()))
     violations = [ ] # type: List[Violation]
 
     for cp in cps:
