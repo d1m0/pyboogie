@@ -188,3 +188,51 @@ class TestBB(TestCase):
             prog = parseAst(text) # type: AstProgram
             with self.assertRaises(AssertionError):
                 Function.build(prog.decls[0])
+
+    def test_loopHdrs(self):
+        """ Make sure Function.loopHeaders returns the correct list of headers
+        """
+        # Simple loop
+        t = """
+                implementation main() {
+                    var x,y: int;
+                start:
+                    x := 0;
+                    assume (n>0);
+                    goto header;
+                header:
+                    goto body, end;
+                body:
+                    assume (x<n);
+                    x := x+1;
+                    goto header;
+                end:
+                    assume(x >= n);
+                }
+        """
+        f = Function.build(parseAst(t).decls[0])
+        hdrs = f.loopHeaders() 
+        assert hdrs == set([f.get_bb("header")]), "Unexpected loop headers: {}".format(hdrs)
+
+        # Nested loops 
+        t = """
+                implementation main() {
+                start:
+                    goto header1;
+                header1:
+                    goto body1, end1;
+                body1:
+                    goto header2;
+                header2:
+                    goto body2, end2;
+                body2:
+                    goto header2;
+                end2:
+                    goto header1;
+                end1:
+                    return;
+                }
+        """
+        f = Function.build(parseAst(t).decls[0])
+        hdrs = f.loopHeaders() 
+        assert hdrs == set([f.get_bb("header1"), f.get_bb("header2")]), "Unexpected loop headers: {}".format(hdrs)

@@ -241,6 +241,23 @@ class Function(object):
     def exits(self) -> Iterator[BB]:
         return iter([bb for bb in self._bbs.values() if bb.isExit()])
 
+    def loopHeaders(self, curpath: Optional[List[BB]] = None) -> Iterable[BB]:
+        if (curpath is None):
+            curpath = [self.entry()]
+
+        hdrs: Set[BB] = set()
+
+        for s in curpath[-1].successors():
+            if (s in curpath):
+                hdrs.add(s)
+                continue
+
+            curpath.append(s)
+            hdrs = hdrs.union(self.loopHeaders(curpath))
+            curpath.pop()
+
+        return hdrs
+
     def exit(self) -> BB:
         return unique(self.exits())
 
