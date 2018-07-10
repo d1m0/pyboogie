@@ -81,7 +81,7 @@ class SSABBNode(NondetSSAPathNode):
         assert len(repl_m) <= len(self.bb) + 1
 
     def to_z3(self, tenv: Z3TypeEnv) -> z3.ExprRef:
-        return And([stmt_to_z3(stmt, tenv) 
+        return And(*[stmt_to_z3(stmt, tenv) 
             for stmt in _ssa_stmts(list(self.bb.stmts()), self.repl_maps)])
 
     def wp(self, pred: z3.ExprRef, tenv: Z3TypeEnv) -> z3.ExprRef:
@@ -110,14 +110,14 @@ class SSANondetNode(NondetSSAPathNode):
         return iter(self.paths)
 
     def to_z3(self, tenv: Z3TypeEnv) -> z3.ExprRef:
-        return Or([And((Int(self.choice_var) == ind), path.to_z3(tenv))
+        return Or(*[And(ccast(Int(self.choice_var) == ind, z3.ExprRef), path.to_z3(tenv))
             for ind, path in enumerate(self.paths)])
 
     def wp(self, pred: z3.ExprRef, tenv: Z3TypeEnv) -> z3.ExprRef:
-        return Or([subpath.wp(pred, tenv) for subpath in self.paths])
+        return Or(*[subpath.wp(pred, tenv) for subpath in self.paths])
 
     def sp(self, pred: z3.ExprRef, tenv: Z3TypeEnv) -> z3.ExprRef:
-        return Or([subpath.sp(pred, tenv) for subpath in self.paths])
+        return Or(*[subpath.sp(pred, tenv) for subpath in self.paths])
 
     def __str__(self) -> str:
         return "{[" + ";".join(str(x) for x in self.paths) + "]}"
@@ -132,7 +132,7 @@ class NondetSSAPath(List[NondetSSAPathNode]):
             return flattenList([list(subp.exits()) for subp in last.paths])
 
     def to_z3(self, tenv: Z3TypeEnv) -> z3.ExprRef:
-        return And([node.to_z3(tenv) for node in self])
+        return And(*[node.to_z3(tenv) for node in self])
 
     def wp(self, pred: z3.ExprRef, tenv: Z3TypeEnv) -> z3.ExprRef:
         for node in reversed(self):

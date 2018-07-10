@@ -18,21 +18,6 @@ import z3
 T=TypeVar("T")
 U=TypeVar("U")
 
-#
-# TODO: This whole file should be deprecated in favor of interp.py. Please
-# don't use any of these
-#
-
-def _to_dict(vs: List[T], vals: List[U]) -> Dict[T,U]:
-    return { vs[i]: vals[i] for i in range(0, len(vs)) }
-
-def evalPred(boogie_expr: AstExpr, env: Store) -> bool:
-    typeEnv = { x : Int for x in env } # type: Z3TypeEnv
-    q = And([stmt_to_z3(stmt, typeEnv) for stmt in [AstAssume(store_to_expr(env)),
-         AstAssert(boogie_expr)]])
-    res = satisfiable(q)
-    return res
-
 # Given an invariant template as a boogie expression where [x,y,z] are
 # variables and [a,b,c] constants And a series of environments, find all
 # instantiations of the template that holds for all elements of the series.
@@ -69,7 +54,7 @@ def instantiateAndEval(inv: AstExpr,
                                      for x in varM.values() }), AstExpr))
                for i in range(len(vals)) ]
 
-        m = maybeModel(And([stmt_to_z3(s, typeEnv) for s in p]))
+        m = maybeModel(And(*[stmt_to_z3(s, typeEnv) for s in p]))
 
         if (m):
             const_vals = {} # type: ReplMap_T

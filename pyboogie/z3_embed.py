@@ -374,14 +374,12 @@ def Bool(n: str) -> z3.BoolRef:
 def Array(n: str, domain: z3.SortRef, range: z3.SortRef) -> z3.ArrayRef:
     return z3.Array(n, domain, range)
 
-def Or(*args: Any) -> z3.ExprRef:
-    #TODO: Make args ExprRef and cast it for the + below
-    return z3.Or(*(args + (getCtx(),)))
+def Or(*args: z3.AstRef) -> z3.ExprRef:
+    return z3.Or(*(cast(Tuple[Any,...], args) + (getCtx(),)))
 
 
-def And(*args: Any) -> z3.ExprRef:
-    #TODO: Make args ExprRef and cast it for the + below
-    return z3.And(*(args + (getCtx(),)))
+def And(*args: z3.AstRef) -> z3.ExprRef:
+    return z3.And(*(cast(Tuple[Any,...], args) + (getCtx(),)))
 
 
 def Not(pred: z3.ExprRef) -> z3.ExprRef:

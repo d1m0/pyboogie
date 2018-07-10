@@ -42,7 +42,7 @@ def sp_stmt(stmt: AstStmt, pred: z3.ExprRef, typeEnv: Z3TypeEnv) -> z3.ExprRef:
               (assignee not in list(map(str, ids(pred)))))
         lhs = expr_to_z3(stmt.lhs, typeEnv)
         rhs = expr_to_z3(stmt.rhs, typeEnv)
-        return And(lhs == rhs, pred)
+        return And(ccast(lhs == rhs, z3.ExprRef), pred)
     elif (isinstance(stmt, AstAssert)):
         return And(pred, expr_to_z3(stmt.expr, typeEnv))
     elif (isinstance(stmt, AstAssume)):
