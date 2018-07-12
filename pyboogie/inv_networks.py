@@ -86,7 +86,6 @@ InvNetwork = Dict[LabelT, Set[AstExpr]]
 ViolationNetwork = Dict[LabelT, Set[Tuple[AstExpr, "Violation"]]]
 
 def filterCandidateInvariants(fun: Function, preCond: AstExpr, postCond: AstExpr, cutPoints: InvNetwork, timeout: Optional[int]=None) -> Tuple[ViolationNetwork, ViolationNetwork, InvNetwork, List[Violation]]:
-    assert (len(cutPoints) == 1)
     entryBB = fun.entry()
 
     cps = { bb : set(cutPoints[bb]) for bb in cutPoints } # type: InvNetwork
@@ -141,7 +140,7 @@ def filterCandidateInvariants(fun: Function, preCond: AstExpr, postCond: AstExpr
           # During Pass 1 we don't check the postcondition is implied
         else:
           for succ in nextBB.successors():
-            if succ in cps:
+            if succ.label in cps:
               # Check implication
               assert isinstance(initial_path[0], SSABBNode)
               start = initial_path[0].bb
