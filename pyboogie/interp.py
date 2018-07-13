@@ -169,7 +169,7 @@ def eval_quick(expr: AstExpr, store: Store) -> BoogieVal:
       assert isinstance(lhs, int)
       assert isinstance(rhs, int)
 
-      return _arith_bin[op](lhs, rhs)
+      return _relational_bin[op](lhs, rhs)
     assert False, "Unknown binary op {}".format(op)
   else:
     assert False, "Unkown expression {}".format(expr)
