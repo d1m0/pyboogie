@@ -21,7 +21,6 @@ from signal import signal, SIGTERM, SIGINT
 from functools import reduce
 from copy import copy
 from os import kill
-from signal import SIGINT, SIGKILL
 
 ctxHolder = local()
 
@@ -275,15 +274,10 @@ class Z3ProxySolver:
 
         # Next a bit more insistantly
         s._proc.terminate()
-        s._proc.join(1)
+        s._proc.join()
 
         if s._proc.exitcode is not None:
             return
-
-        # And now we ran out of patience
-        if (s._proc.pid is not None):
-            kill(s._proc.pid, SIGKILL)
-            s._proc.join()
 
 
 z3ProcessPoolCond = Condition()
