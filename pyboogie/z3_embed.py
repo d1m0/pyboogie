@@ -64,6 +64,8 @@ def type_to_z3(ast_typ: AstType) -> Z3ValFactory_T:
 def boogieToZ3TypeEnv(env: BoogieTypeEnv) -> Z3TypeEnv:
     return { name: type_to_z3(typ) for (name, typ) in env.items() }
 
+# TODO(shraddha): You need to update this function to handle converting
+# z3 map int your maps (boogie FunctionInterpretation)
 def z3val_to_boogie(v: Union[z3.ExprRef, z3.FuncInterp]) -> BoogieVal:
     if isinstance(v, z3.IntNumRef):
         return v.as_long()

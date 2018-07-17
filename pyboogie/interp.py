@@ -6,6 +6,9 @@ from .ast import AstAssert, AstAssume, AstHavoc, AstAssignment, AstGoto, \
   AstExpr, AstMapIndex, ast_and, AstForallExpr, AstBinding, AstIntType
 from typing import Any, Dict, Callable, Union, Iterable, Tuple, Set, List, NamedTuple
 
+#TODO(shraddha): The name of this class is confusing. In the Boogie docs the data type is called Map.
+# So we should call it something like MapVal? BoogieMap? Also if anywhere in comments or code you see 
+# me refering to 'arrays' feel free to change it. Its wrong :)
 class FuncInterp:
     def __init__(self, explicit_cases: Dict["BoogieVal", "BoogieVal"], default: "BoogieVal") -> None:
       self._explicit_cases = explicit_cases
@@ -31,6 +34,8 @@ class OpaqueVal(object):
     def from_dict(d: Dict[Any, Any]) -> "OpaqueVal":
       return OpaqueVal()
 
+#TODO(shraddha): After arrays are implemented, think about whether OpaqueVal is still neccessary. This may
+# require looking at the KRML document, to try and see what other concrete data-types and values exist in Boogie?
 BoogieVal = Union[int, bool, FuncInterp, OpaqueVal]
 Store = Dict[str, BoogieVal]
 PC = NamedTuple("PC", [("bb", BB), ("next_stmt", int)])
@@ -49,6 +54,10 @@ def val_to_ast(v: BoogieVal) -> AstExpr:
   else:
     assert False, "Can't convert {} to ast node".format(v)
 
+#TODO(shraddha): Will need to update this function to handle arrays. This function works like this:
+# Given a store like {x: 1, y: 2, n: 5} it returns a boogie expression such as "x==1 && y == 2 && n == 5"
+# Now what happens when you have a store like { n: 5, arr: {0->1, 5->8, _->0}}? You may want something like:
+# "n == 5 && arr[0] == 1 && arr[5] == 8 && (forall j: int :: (j != 0 && j != 5) ==> arr[j] == 0"? This is just an idea.
 def store_to_expr(s: Store, suff:str ="") -> AstExpr:
     """ Create a boolean expression that is equivalent to the store s
     """
@@ -113,6 +122,10 @@ _relational_bin = {
 
 class BoogieRuntimeExc(Exception):  pass
 
+# TODO(shraddha): This needs to be update 2 new expressions: 
+#  1) indexing expressions - e.g. arr[x]
+#  2) map update expressions - e.g. arr[x:=5]. The expression arr[x:=5] means a new map, that is the same
+# as the arr map, except for at the index corresponding to the value of x, it maps to 5.
 def eval_quick(expr: AstExpr, store: Store) -> BoogieVal:
   """
   Evaluate an expression in a given environment. Boogie expressions are always
@@ -320,6 +333,14 @@ if __name__ == "__main__":
   args = p.parse_args()
 
   fun = unique(Function.load(args.file)) # type: Function
+  # TODO(Shraddha): This needs to be updated to support booleans and 
+  # arrays. You may want to write a pair of generic functions:
+  #
+  # toStr(b: BoogieVal) -> str
+  # fromStr(s: str) -> BoogieVal
+  #
+  # Note that toStr/fromStr for AstNumber and AstTrue/AstFalse are already written for you (basically .pp() and parseExprAst).
+  # You just need to handle the case for maps.
   starting_store = {  k : int(v) for (k, v) in
     [ x.split("=") for x in args.starting_env.split(",") ]
   } # type: Store
