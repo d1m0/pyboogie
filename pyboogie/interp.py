@@ -333,7 +333,7 @@ if __name__ == "__main__":
   args = p.parse_args()
 
   fun = unique(Function.load(args.file)) # type: Function
-  # TODO(Shraddha): This needs to be updated to support booleans and 
+  # TODO(shraddha): This needs to be updated to support booleans and 
   # arrays. You may want to write a pair of generic functions:
   #
   # toStr(b: BoogieVal) -> str
