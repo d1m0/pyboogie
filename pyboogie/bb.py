@@ -264,9 +264,11 @@ class Function(object):
     def bbs(self) -> Iterable[BB]:
         return self._bbs.values()
 
-    def bbs_preorder(self, bb: Optional[BB] = None, visited = None) -> Iterable[BB]:
+    def bbs_preorder(self, bb: Optional[BB] = None, visited: Optional[Set[BB]] = None) -> Iterable[BB]:
         if (bb is None):
             bb = self.entry()
+
+        if (visited is None):
             visited = set()
 
         yield bb

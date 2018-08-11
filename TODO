@@ -17,8 +17,8 @@ TODOs for supporting more of language:
     - check type vars in Map type def are distinct
     - fix paths to be list of Locs == (BB, idx)
     - Change LabelT to Union[str, int]
-    - rename FuncInterp to MapVal, decide how to specify these values
     - maybe remove eval.py? Seems like old code
+    - support old kw
 
 Book-keeping
     - make a note somewhere grammar doesn't yet support Unicode
