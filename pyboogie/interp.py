@@ -27,6 +27,12 @@ class FuncInterp:
     def from_dict(d: Dict[Any, Any]) -> "FuncInterp":
       return FuncInterp(d["explicit"], d["default"])
 
+    def __str__(self) -> str:
+      return '{' +\
+        ','.join('{}:{}'.format(str(k), str(v)) for (k,v) in self._explicit_cases.items()) +\
+        ('' if self._default_case is None else '|' + str(self._default_case)) +\
+        '}'
+
 class OpaqueVal(object):
     @staticmethod
     def to_dict(f: "OpaqueVal") -> Dict[Any, Any]:
@@ -55,7 +61,7 @@ class BoogieValParser:
 
     BoogieBool: ParserElement[BoogieVal] = L("true") | L("false")
     def parseBool(s: str, loc: int, toks: "ParseResults[Any]") -> List[BoogieVal]:
-      return [s=="true"]
+      return [toks[0]=="true"]
     BoogieBool.setParseAction(parseBool)
 
     BoogieMap: Forward = Forward()
