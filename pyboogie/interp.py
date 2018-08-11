@@ -4,7 +4,12 @@ from .util import unique, ccast
 from .ast import AstAssert, AstAssume, AstHavoc, AstAssignment, AstGoto, \
   AstReturn, AstUnExpr, AstBinExpr, AstNumber, AstId, AstTrue, AstFalse, \
   AstExpr, AstMapIndex, ast_and, AstForallExpr, AstBinding, AstIntType
-from typing import Any, Dict, Callable, Union, Iterable, Tuple, Set, List, NamedTuple
+from typing import Any, Dict, Callable, Union, Iterable, Tuple, Set, List, NamedTuple, Optional
+from pyparsing import Forward, nums, Word, ParserElement, ParseResults, delimitedList as csl, StringEnd,\
+  Optional as O,\
+  Literal as L,\
+  Group as G, \
+  Suppress as S
 
 class FuncInterp:
     def __init__(self, explicit_cases: Dict["BoogieVal", "BoogieVal"], default: "BoogieVal") -> None:
@@ -40,6 +45,37 @@ States = Set[State]
 
 RandF = Callable[[State, str], BoogieVal]
 ChoiceF = Callable[[Iterable[State]], List[State]]
+
+class BoogieValParser:
+  def __init__(self) -> None:
+    BoogieInt: ParserElement[BoogieVal] = O("-") + Word(nums)
+    def parseInt(s: str, loc: int, toks: "ParseResults[Any]") -> List[BoogieVal]:
+      return [int("".join(toks))]
+    BoogieInt.setParseAction(parseInt)
+
+    BoogieBool: ParserElement[BoogieVal] = L("true") | L("false")
+    def parseBool(s: str, loc: int, toks: "ParseResults[Any]") -> List[BoogieVal]:
+      return [s=="true"]
+    BoogieBool.setParseAction(parseBool)
+
+    BoogieMap: Forward = Forward()
+    BoogieValRule: ParserElement[BoogieVal] = BoogieInt | BoogieBool | BoogieMap
+    BoogieMap << (S(L("{")) + G(csl(G(BoogieValRule + S(L(":")) + BoogieValRule))) +\
+                                    O(S(L("|")) + BoogieValRule) + S(L("}")))
+
+    def parseMap(s: str, loc: int, toks: "ParseResults[Any]") -> List[BoogieVal]:
+      explicitVals : Dict[BoogieVal, BoogieVal] = {key: val for (key,val) in toks[0]}
+      defaultVal: Optional[BoogieVal] = None
+      if (len(toks) == 2):
+        defaultVal = toks[1]
+      return [FuncInterp(explicitVals, defaultVal)]
+
+    BoogieMap.setParseAction(parseMap)
+    self._root = BoogieValRule
+
+  def parse(self, s: str) -> BoogieVal:
+    return self._root.parseString(s)[0]
+
 
 def val_to_ast(v: BoogieVal) -> AstExpr:
   if isinstance(v, int):
