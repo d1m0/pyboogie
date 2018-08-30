@@ -5,6 +5,7 @@ from pyparsing import ParseResults as PR, ParserElement as PE
 from functools import reduce
 from typing import List, Iterable, Set, TYPE_CHECKING, Any, Union, Dict, TypeVar, Callable, Tuple, NamedTuple, Type
 from attr import attrs, attrib
+from re import compile
 
 LabelT = str
 
@@ -119,6 +120,15 @@ class AstAttribute(AstNode):
     def __str__(s) -> str:
         return "{ :" + s.name + " " + ",".join(map(str, s.args)) + "}"
 
+def stripOutsideParenthesis(e: AstExpr) -> str:
+    s = str(e)
+    if isinstance(e, AstForallExpr) or isinstance(e, AstBinExpr):
+        stripRe = compile("^ *\((.*)\) *$")
+        m = stripRe.match(s)
+        assert m is not None, "{} doesn't match RE {}".format(s, stripRe)
+        s = m.groups()[0]
+    return s
+
 @attrs(frozen=True)
 class AstBinding(AstNode):
     names = attrib(type=Tuple[str,...])
@@ -154,16 +164,16 @@ class AstOneExprStmt(AstStmt):
     expr = attrib(type=AstExpr)
 
 class AstAssert(AstOneExprStmt):
-    def __str__(s) -> str: return "assert (" + str(s.expr) + ");"
+    def __str__(s) -> str: return "assert " + stripOutsideParenthesis(s.expr) + ";"
 
 class AstAssume(AstOneExprStmt):
-    def __str__(s) -> str: return "assume (" + str(s.expr) + ");"
+    def __str__(s) -> str: return "assume " + stripOutsideParenthesis(s.expr) + ";"
 
 @attrs(frozen=True)
 class AstAssignment(AstStmt):
     lhs = attrib(type=Union[AstId, AstMapIndex])
     rhs = attrib(type=AstExpr)
-    def __str__(s) -> str: return str(s.lhs) + " := " + str(s.rhs) + ";"
+    def __str__(s) -> str: return str(s.lhs) + " := " + stripOutsideParenthesis(s.rhs) + ";"
 
 @attrs(frozen=True)
 class AstHavoc(AstStmt):
