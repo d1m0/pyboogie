@@ -3,8 +3,6 @@ from .ast import AstId, AstNode, ReplMap_T
 from copy import copy, deepcopy
 from frozendict import frozendict
 from typing import Optional, Dict, List, TYPE_CHECKING
-from .z3_embed import Z3TypeEnv, Z3ValFactory_T
-from .interp import Store
 
 class SSAEnv:
     def __init__(s, parent : Optional["SSAEnv"] = None, prefix: str = ".") -> None:
@@ -55,32 +53,3 @@ def is_ssa_str(s: str) -> bool:
 
 def unssa_str(s: str) -> str:
     return s[:s.rfind("_ssa_")]
-
-def unssa_z3_model(m: Store, repl_m: ReplMap_T) -> Store:
-    updated = list(map(str, iter(repl_m.keys())))
-    original = [ x for x in m.keys() if not is_ssa_str(x) and x not in updated ]
-    res = { (unssa_str(x) if is_ssa_str(x) else x) : m.get(x, None)
-                for x in original + list(map(str, iter(repl_m.values())))
-          }
-    return frozendict(res)
-
-def get_ssa_tenv(tenv: Z3TypeEnv) -> Z3TypeEnv:
-    class SSATEnv(Z3TypeEnv):
-        def __init__(self, inner: Z3TypeEnv) -> None:
-            self._inner_env = inner
-        def __getitem__(self, k: str) -> Z3ValFactory_T:
-            if is_ssa_str(k):
-                k = unssa_str(k)
-            return self._inner_env[k]
-
-        def __setitem__(self, k: str, typ: Z3ValFactory_T) -> None:
-            self._inner_env[k] = typ
-
-        def __copy__(self) -> "SSATEnv":
-            new = SSATEnv({})
-            new._inner_env.update(self._inner_env)
-            return new
-
-        def __str__(self) -> str:
-            return str(self._inner_env)
-    return SSATEnv(tenv)

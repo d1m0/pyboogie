@@ -5,8 +5,9 @@ from .ast import AstType, AstIntType, AstBoolType, AstMapType, AstExpr,\
     AstFuncExpr, AstAssignment, AstAssert, AstAssume,\
     AstForallExpr, AstMapUpdate, AstMapIndex, AstLabel
 from .bb import Function as bb_Function, TypeEnv as BoogieTypeEnv
-from .interp import BoogieVal, OpaqueVal, Store
+from .interp import OpaqueVal, BoogieVal, Store
 import z3
+from .ssa import is_ssa_str, unssa_str
 
 from threading import Condition, local
 from time import time
@@ -26,6 +27,27 @@ ctxHolder = local()
 
 Z3ValFactory_T = Callable[[str], z3.ExprRef]
 Z3TypeEnv = Dict[str, Z3ValFactory_T]
+
+def get_ssa_tenv(tenv: Z3TypeEnv) -> Z3TypeEnv:
+    class SSATEnv(Z3TypeEnv):
+        def __init__(self, inner: Z3TypeEnv) -> None:
+            self._inner_env = inner
+        def __getitem__(self, k: str) -> Z3ValFactory_T:
+            if is_ssa_str(k):
+                k = unssa_str(k)
+            return self._inner_env[k]
+
+        def __setitem__(self, k: str, typ: Z3ValFactory_T) -> None:
+            self._inner_env[k] = typ
+
+        def __copy__(self) -> "SSATEnv":
+            new = SSATEnv({})
+            new._inner_env.update(self._inner_env)
+            return new
+
+        def __str__(self) -> str:
+            return str(self._inner_env)
+    return SSATEnv(tenv)
 
 def fi_deserialize(classname: str, d: Dict[Any, Any]) -> OpaqueVal:
     return OpaqueVal.from_dict(d)
@@ -64,6 +86,8 @@ def type_to_z3(ast_typ: AstType) -> Z3ValFactory_T:
 def boogieToZ3TypeEnv(env: BoogieTypeEnv) -> Z3TypeEnv:
     return { name: type_to_z3(typ) for (name, typ) in env.items() }
 
+# TODO(shraddha): You need to update this function to handle converting
+# z3 map int your maps (boogie FunctionInterpretation)
 def z3val_to_boogie(v: Union[z3.ExprRef, z3.FuncInterp]) -> BoogieVal:
     if isinstance(v, z3.IntNumRef):
         return v.as_long()
