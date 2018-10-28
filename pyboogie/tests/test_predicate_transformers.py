@@ -19,7 +19,7 @@ class TestPredicateTransformers(TestCase):
         (Int('y') == IntVal(4), "x:=y;", Int('x') == IntVal(4), {'x': Int, 'y': Int}),
         (Int('z') == IntVal(4), "x:=y;", Int('z') == IntVal(4), {'x': Int, 'y': Int}),
         (((Int('y') + IntVal(1)) == IntVal(4)), "x:=y+1;", Int('x') == IntVal(4), {'x': Int, 'y': Int}),
-        (And(Int('y') == IntVal(4), Int('x') == IntVal(1)), "assert (x==1);", Int('y') == IntVal(4), {'x': Int, 'y': Int}),
+        (And(_toExpr(Int('y') == IntVal(4)), _toExpr(Int('x') == IntVal(1))), "assert (x==1);", Int('y') == IntVal(4), {'x': Int, 'y': Int}),
         (Implies(_toExpr(Int('x') == IntVal(1)), _toExpr(Int('y') == IntVal(4))), "assume (x==1);", Int('y') == IntVal(4), {'x': Int, 'y': Int}),
         (Implies(_toExpr(Int('x') == IntVal(1)), _toExpr(Int('y') == IntVal(4))), "assume (x==1);", Int('y') == IntVal(4), {'x': Int, 'y': Int}),
     ]
@@ -59,11 +59,11 @@ class TestPredicateTransformers(TestCase):
             sp_stmt(parseStmt("havoc x;"), BoolVal(True), {'x': Int})
 
     testSPCases : List[Tuple[Any, str, Any, Z3TypeEnv]] = [
-        (Int('y') == IntVal(4), "x:=y;", And(Int('x') == Int('y'), Int('y') == IntVal(4)), {'x': Int, 'y': Int}),
-        (Int('z') == IntVal(4), "x:=y;", And(Int('x') == Int('y'), Int('z') == IntVal(4)), {'x': Int, 'y': Int, 'z': Int}),
-        (Int('z') == IntVal(4), "x:=y+1;", And(Int('x') == (Int('y')+IntVal(1)), Int('z') == IntVal(4)), {'x': Int, 'y': Int, 'z': Int}),
-        (Int('y') == IntVal(4), "assert (x==1);", And(Int('y') == IntVal(4), IntVal(1) == Int('x')), {'x': Int, 'y': Int}),
-        (Int('y') == IntVal(4), "assume (x==1);", And(Int('y') == IntVal(4), IntVal(1) == Int('x')), {'x': Int, 'y': Int}),
+        (Int('y') == IntVal(4), "x:=y;", And(_toExpr(Int('x') == Int('y')), _toExpr(Int('y') == IntVal(4))), {'x': Int, 'y': Int}),
+        (Int('z') == IntVal(4), "x:=y;", And(_toExpr(Int('x') == Int('y')), _toExpr(Int('z') == IntVal(4))), {'x': Int, 'y': Int, 'z': Int}),
+        (Int('z') == IntVal(4), "x:=y+1;", And(_toExpr(Int('x') == (Int('y')+IntVal(1))), _toExpr(Int('z') == IntVal(4))), {'x': Int, 'y': Int, 'z': Int}),
+        (Int('y') == IntVal(4), "assert (x==1);", And(_toExpr(Int('y') == IntVal(4)), _toExpr(IntVal(1) == Int('x'))), {'x': Int, 'y': Int}),
+        (Int('y') == IntVal(4), "assume (x==1);", And(_toExpr(Int('y') == IntVal(4)), _toExpr(IntVal(1) == Int('x'))), {'x': Int, 'y': Int}),
     ]
 
     def testSP(self):
