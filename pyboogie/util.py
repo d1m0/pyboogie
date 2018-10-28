@@ -12,7 +12,7 @@ SizedIterable=Union[List[T], Set[T]]
 C = TypeVar("C", bound=object)
 def ccast(a: Any, t: Type[C]) -> C:
     """ Checked cast down to the type t """
-    assert(isinstance(a, t))
+    assert isinstance(a, t), "Expected an instance of {} but got {}".format(t, a)
     return a
 
 def clcast(a: Any, t: Type[C]) -> List[C]:
@@ -85,3 +85,7 @@ def get_uid(prefix: str) -> str:
     _uids[prefix] += 1
 
     return prefix + "_" + str(_uids[prefix])
+
+
+def ite(c: bool, a: T, b: T) -> T:
+    return a if c else b

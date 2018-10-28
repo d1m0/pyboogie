@@ -27,6 +27,9 @@ class BoogieParser(Generic[T]):
   def onAssignment(s, prod: "ParserElement[T]", st: str, loc: int, toks:"ParseResults[T]") -> "Iterable[T]": raise Exception("NYI")
   def onHavoc(s, prod: "ParserElement[T]", st: str, loc: int, toks:"ParseResults[T]") -> "Iterable[T]": raise Exception("NYI")
   def onProgram(s, prod: "ParserElement[T]", st: str, loc: int, toks:"ParseResults[T]") -> "Iterable[T]": raise Exception("NYI")
+  def onVarDecl(s, prod: "ParserElement[T]", st: str, loc: int, toks:"ParseResults[T]") -> "Iterable[T]": raise Exception("NYI")
+  def onAxiomDecl(s, prod: "ParserElement[T]", st: str, loc: int, toks:"ParseResults[T]") -> "Iterable[T]": raise Exception("NYI")
+  def onConstDecl(s, prod: "ParserElement[T]", st: str, loc: int, toks:"ParseResults[T]") -> "Iterable[T]": raise Exception("NYI")
   def onImplementationDecl(s, prod: "ParserElement[T]", st: str, loc: int, toks:"ParseResults[T]") -> "Iterable[T]": raise Exception("NYI")
   def onTypeConstructorDecl(s, prod: "ParserElement[T]", st: str, loc: int, toks:"ParseResults[T]") -> "Iterable[T]": raise Exception("NYI")
   def onBody(s, prod: "ParserElement[T]", st: str, loc: int, toks:"ParseResults[T]") -> "Iterable[T]": raise Exception("NYI")
@@ -162,7 +165,7 @@ class BoogieParser(Generic[T]):
     s.CompoundType.setParseAction(lambda st, loc, toks: s.onCompoundType(s.CompoundType, st, loc, toks))
     s.Type << (s.TypeAtom | s.MapType | s.CompoundType) #pylint: disable=expression-not-assigned
     s.Type.setParseAction(lambda st, loc, toks: s.onType(s.Type, st, loc, toks))
-    s.IdsType = csl(s.Id) + s.COLN + s.Type
+    s.IdsType = G(csl(s.Id)) + S(s.COLN) + s.Type
     s.IdsType.setParseAction(lambda st, loc, toks: s.onBinding(s.Type, st, loc, toks))
 
     ####### Type Declarations
@@ -173,8 +176,10 @@ class BoogieParser(Generic[T]):
     s.TypeDecl = s.TypeConstructor | s.TypeSynonym
 
     ####### Constant Declarations
-    s.ConstantDecl = s.CONST + O(s.Attribute) + O(s.UNIQUE) + \
-            s.IdsType + s.OrderSpec
+    s.ConstantDecl = S(s.CONST) + G(O(s.Attribute)) + G(O(s.UNIQUE)) + \
+            s.IdsType + G(s.OrderSpec) + s.SEMI
+    s.ConstantDecl.setParseAction(
+            lambda st, loc, toks:  s.onConstDecl(s.ConstantDecl, st, loc, toks))
 
 
     s.Number = W(nums) # type: ParserElement[T]
@@ -249,12 +254,16 @@ class BoogieParser(Generic[T]):
                         s.LBRAC + s.Expr + s.RBRAC
 
     ####### Axiom Declarations
-    s.AxiomDecl = s.AXIOM + s.AttrList + s.Expr
+    s.AxiomDecl = s.AXIOM + s.AttrList + s.Expr + s.SEMI
+    s.AxiomDecl.setParseAction(
+            lambda st, loc, toks: s.onAxiomDecl(s.RelExpr, st, loc, toks))
 
     s.WhereClause = F() # TODO
 
     s.IdsTypeWhere = s.IdsType + O(s.WhereClause)
-    s.VarDecl = s.VAR + s.AttrList + s.IdsTypeWhere
+    s.VarDecl = S(s.VAR) + G(s.AttrList) + s.IdsTypeWhere + s.SEMI
+    s.VarDecl.setParseAction(
+            lambda st, loc, toks: s.onVarDecl(s.RelExpr, st, loc, toks))
 
     ####### Procedure Declarations
     s.Spec =  O(s.FREE) + s.REQUIRES + s.Expr + s.SEMI \
@@ -373,7 +382,7 @@ class BoogieParser(Generic[T]):
     s.Program = ZoM(s.Decl) # type: ParserElement[T]
     s.Program.setParseAction(
             lambda st, loc, toks: s.onProgram(s.Program, st, loc, toks))
-    s.Program.ignore("//" + restOfLine)
+    s.Program.ignore(L("//") + restOfLine)
 
   def parseExpr(s, st:str) -> T:
     return (s.Expr + StringEnd()).parseString(st)[0]

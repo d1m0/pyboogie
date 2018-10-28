@@ -1,6 +1,6 @@
 #pylint: disable=no-self-argument,multiple-statements
 from .grammar import BoogieParser
-from .util import ccast, clcast
+from .util import ccast, clcast, ite
 from pyparsing import ParseResults as PR, ParserElement as PE
 from functools import reduce
 from typing import List, Iterable, Set, TYPE_CHECKING, Any, Union, Dict, TypeVar, Callable, Tuple, NamedTuple, Type
@@ -8,6 +8,7 @@ from attr import attrs, attrib
 from re import compile
 
 LabelT = str
+T=TypeVar("T")
 
 class AstNode:
     def __eq__(self, other: object) -> bool:
@@ -204,6 +205,35 @@ class AstBody(AstNode):
 class AstDecl(AstNode): pass
 
 @attrs(frozen=True)
+class AstVarDecl(AstDecl):
+    attributes = attrib(type=List[AstAttribute])
+    binding = attrib(type=AstBinding)
+
+    def __str__(s) -> str:
+        return "var " + " ".join(map(str, s.attributes)) + str(s.binding) + ";"
+
+
+@attrs(frozen=True)
+class AstAxiomDecl(AstDecl):
+    attributes = attrib(type=List[AstAttribute])
+    expr = attrib(type=AstExpr)
+
+    def __str__(s) -> str:
+        return "axiom " + " ".join(map(str, s.attributes)) + str(s.expr) + ";"
+
+
+@attrs(frozen=True)
+class AstConstDecl(AstDecl):
+    attributes = attrib(type=List[AstAttribute])
+    unique = attrib(type=bool)
+    binding = attrib(type=AstBinding)
+
+    def __str__(s) -> str:
+        return "const " + " ".join(map(str, s.attributes)) + \
+                ite(s.unique, " unique ", "") + str(s.binding) + ";"
+
+
+@attrs(frozen=True)
 class AstImplementation(AstDecl):
     name = attrib(type = str)
     parameters = attrib(type = List[AstBinding])
@@ -237,7 +267,6 @@ def _mkBinExp(lhs: Any, op: Any, rhs: Any) -> AstBinExpr:
          isinstance(op, str)
   return AstBinExpr(lhs, op, rhs)
 
-T=TypeVar("T")
 def listify(p: "PR[T]") -> "List[T]":
     if (len(p) == 0):
         return [] 
@@ -307,8 +336,9 @@ class AstBuilder(BoogieParser[AstNode]):
     return [ _mkBinExp(*toks) ]
 
   def onBinding(s, prod: PE, st: str, loc: int, toks: PR) -> Iterable[AstNode]:
-    assert isinstance(toks[-1], AstType)
-    return [ AstBinding(tuple(map(str, toks[:-1])), toks[-1]) ]
+    ids = map(str, toks[0])
+    typ = toks[1]
+    return [ AstBinding(tuple(ids), typ) ]
 
   def onTypeConstructorDecl(s, prod: PE, st: str, loc: int, toks: PR) -> Iterable[AstNode]:
     return [ AstTypeConstructorDecl(
@@ -382,6 +412,26 @@ class AstBuilder(BoogieParser[AstNode]):
   def onBody(s, prod: PE, st: str, loc: int, toks: PR) -> Iterable[AstNode]:
     assert len(toks) == 2
     return [ AstBody(listify(toks[0]), listify(toks[1])) ]
+
+  def onVarDecl(s, prod: PE, st: str, loc: int, toks: PR) -> Iterable[AstNode]:
+    attributes = toks[0]
+    binding = toks[1]
+    return [AstVarDecl(attributes, binding)]
+
+  def onAxiomDecl(s, prod: PE, st: str, loc: int, toks: PR) -> Iterable[AstNode]:
+    attributes = toks[0]
+    expr = toks[1]
+    return [AstAxiomDecl(attributes, expr)]
+
+  def onConstDecl(s, prod: PE, st: str, loc: int, toks: PR) -> Iterable[AstNode]:
+    attributes = toks[0]
+    unique = len(toks[1]) != 0
+    binding = toks[2]
+    orderSpec = toks[3]
+    assert len(orderSpec) == 0, "Order spec {} NYI".format(orderSpec)
+    res =[AstConstDecl(attributes, unique, binding)]
+    return res
+
   def onImplementationDecl(s, prod: PE, st: str, loc: int, toks: PR) -> Iterable[AstNode]:
     attrs = toks[0]
     assert(len(attrs) == 0)
