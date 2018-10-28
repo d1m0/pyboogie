@@ -31,6 +31,7 @@ class BoogieParser(Generic[T]):
   def onAxiomDecl(s, prod: "ParserElement[T]", st: str, loc: int, toks:"ParseResults[T]") -> "Iterable[T]": raise Exception("NYI")
   def onConstDecl(s, prod: "ParserElement[T]", st: str, loc: int, toks:"ParseResults[T]") -> "Iterable[T]": raise Exception("NYI")
   def onImplementationDecl(s, prod: "ParserElement[T]", st: str, loc: int, toks:"ParseResults[T]") -> "Iterable[T]": raise Exception("NYI")
+  def onProcedureDecl(s, prod: "ParserElement[T]", st: str, loc: int, toks:"ParseResults[T]") -> "Iterable[T]": raise Exception("NYI")
   def onTypeConstructorDecl(s, prod: "ParserElement[T]", st: str, loc: int, toks:"ParseResults[T]") -> "Iterable[T]": raise Exception("NYI")
   def onBody(s, prod: "ParserElement[T]", st: str, loc: int, toks:"ParseResults[T]") -> "Iterable[T]": raise Exception("NYI")
   def onLocalVarDecl(s, prod: "ParserElement[T]", st: str, loc: int, toks:"ParseResults[T]") -> "Iterable[T]": raise Exception("NYI")
@@ -266,13 +267,13 @@ class BoogieParser(Generic[T]):
             lambda st, loc, toks: s.onVarDecl(s.RelExpr, st, loc, toks))
 
     ####### Procedure Declarations
-    s.Spec =  O(s.FREE) + s.REQUIRES + s.Expr + s.SEMI \
-          | O(s.FREE) + s.MODIFIES + csl(s.Id) + s.SEMI \
-          | O(s.FREE) + s.ENSURES + s.Expr + s.SEMI
+    s.Spec =  G(G(O(s.FREE)) + s.REQUIRES + s.Expr + s.SEMI) \
+          | G(G(O(s.FREE)) + s.MODIFIES + G(csl(s.Id)) + s.SEMI) \
+          | G(G(O(s.FREE)) + s.ENSURES + s.Expr + s.SEMI)
 
     s.OutParameters = s.RETURNS + s.LPARN + csl(s.IdsTypeWhere) + s.RPARN
-    s.PSig = O(s.TypeArgs) + s.LPARN + csl(s.IdsTypeWhere) + \
-            s.RPARN + O(s.OutParameters)
+    s.PSig = G(O(s.TypeArgs)) + S(s.LPARN) + G(O(csl(s.IdsTypeWhere))) + \
+            S(s.RPARN) + G(O(s.OutParameters))
 
 
     s.LocalVarDecl = S(s.VAR) + s.AttrList + csl(s.IdsTypeWhere) + \
@@ -319,7 +320,7 @@ class BoogieParser(Generic[T]):
     s.HavocStmt.setParseAction(
             lambda st, loc, toks: s.onHavoc(s.HavocStmt, st, loc, toks))
 
-    s.CallAssignStmt = s.CALL + O(s.CallLhs) + s.Id + s.LPARN + csl(s.Expr) +\
+    s.CallAssignStmt = s.CALL + O(s.AttrList) + O(s.CallLhs) + s.Id + s.LPARN + csl(s.Expr) +\
             s.RPARN + S(s.SEMI)
     s.CallForallStmt = s.CALL + s.FORALL + s.Id + s.LPARN + \
             csl(s.WildcardExpr) + s.RPARN + S(s.SEMI)
@@ -358,8 +359,10 @@ class BoogieParser(Generic[T]):
     s.Body.setParseAction(lambda st, loc, toks: s.onBody(s.Body, st, loc, toks))
 
     s.ProcedureDecl = \
-        s.PROCEDURE + s.AttrList + s.Id + s.PSig + s.SEMI + ZoM(s.Spec) |\
-        s.PROCEDURE + s.AttrList + s.Id + s.PSig + ZoM(s.Spec) + s.Body
+        S(s.PROCEDURE) + G(s.AttrList) + s.Id + G(s.PSig) + S(s.SEMI) + G(ZoM(s.Spec)) |\
+        S(s.PROCEDURE) + G(s.AttrList) + s.Id + G(s.PSig) + G(ZoM(s.Spec)) + s.Body
+    s.ProcedureDecl.setParseAction(
+      lambda st, loc, toks: s.onProcedureDecl(s.ProcedureDecl, st, loc, toks))
 
     s.IOutParameters = S(s.RETURNS) + S(s.LPARN) + csl(s.IdsType) + S(s.RPARN)
     s.ISig = G(O(s.TypeArgs)) + S(s.LPARN) + G(O(csl(s.IdsType))) + S(s.RPARN) +\

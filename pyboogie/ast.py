@@ -3,12 +3,13 @@ from .grammar import BoogieParser
 from .util import ccast, clcast, ite
 from pyparsing import ParseResults as PR, ParserElement as PE
 from functools import reduce
-from typing import List, Iterable, Set, TYPE_CHECKING, Any, Union, Dict, TypeVar, Callable, Tuple, NamedTuple, Type
+from typing import List, Iterable, Set, TYPE_CHECKING, Any, Union, Dict, \
+        TypeVar, Callable, Tuple, NamedTuple, Type, Optional
 from attr import attrs, attrib
 from re import compile
 
 LabelT = str
-T=TypeVar("T")
+T = TypeVar("T")
 
 class AstNode:
     def __eq__(self, other: object) -> bool:
@@ -246,6 +247,38 @@ class AstImplementation(AstDecl):
             str(s.body)
 
 @attrs(frozen=True)
+class AstProcedure(AstDecl):
+    attributes = attrib(type=List[AstAttribute])
+    name = attrib(type=str)
+    parameters = attrib(type=List[AstBinding])
+    returns = attrib(type=List[AstBinding])
+    requires = attrib(type=List[Tuple[bool, AstExpr]])
+    ensures = attrib(type=List[Tuple[bool, AstExpr]])
+    modifies = attrib(type=List[Tuple[bool, str]])
+    body = attrib(type=Optional[AstBody])
+
+    def __str__(s) -> str:
+        spec = ""
+
+        for (free, expr) in s.requires:
+            spec += "\n " + ite(free, "free ", "") + "requires " + str(expr) + ";"
+        for (free, id) in s.modifies:
+            spec += "\n " + ite(free, "free ", "") + "modifies " + str(id) + ";"
+        for (free, expr) in s.ensures:
+            spec += "\n " + ite(free, "free ", "") + "modifies " + str(expr) + ";"
+
+        res = "procedure " + " ".join(map(str, s.attributes)) + s.name
+        res += "(" + ",".join(map(str, s.parameters)) + ")"
+        res += "returns (" + ",".join(map(str, s.returns)) + ")"
+
+        if (s.body is None):
+            res += ";" + spec
+        else:
+            res += spec + "\n" + str(s.body)
+
+        return res
+
+@attrs(frozen=True)
 class AstTypeConstructorDecl(AstDecl):
     name = attrib(type=str)
     formals = attrib(type=List[str])
@@ -443,6 +476,37 @@ class AstBuilder(BoogieParser[AstNode]):
     assert len(type_args) == 0, "NYI: Imeplementation type args: {}".format(type_args)
     body = toks[3][0]  # type: AstBody
     return [ AstImplementation(name, listify(parameters), listify(returns), body) ]
+
+
+  def onProcedureDecl(s, prod: PE, st: str, loc: int, toks: PR) -> Iterable[AstNode]:
+    attributes = toks[0]
+    name = str(toks[1])
+    signature = toks[2]
+    assert len(signature) == 3
+    (type_args, parameters, returns) = signature # type: Tuple[PR[Any], PR[AstBinding], PR[AstBinding]]
+    # For now ignore anything other than the argument list
+    assert len(type_args) == 0, "NYI: Imeplementation type args: {}".format(type_args)
+    spec = toks[3]
+    body = toks[4] if (len(toks) ==5) else None  # type: Optional[AstBody]
+    requires: List[Tuple[bool, AstExpr]] = []
+    ensures: List[Tuple[bool, AstExpr]] = []
+    modifies: List[Tuple[bool, str]] = []
+
+    for (free, typ, arg) in spec:
+        isFree = len(free) != 0
+        if typ == "requires":
+          requires.append((isFree, arg))
+        elif typ == "modifies":
+          modifies.extend([(isFree, id) for id in arg])
+        elif typ == "ensures":
+          ensures.append((isFree, arg))
+        else:
+            assert False, "Unknown spec type " + typ
+
+    return [
+        AstProcedure(attributes, name,
+                     listify(parameters), listify(returns),
+                     requires, ensures, modifies, body)]
 
   def onLabeledStatement(s, prod: PE, st: str, loc: int, toks: PR) -> Iterable[AstNode]:
     label = str(toks[0]) # type: LabelT
