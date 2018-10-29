@@ -231,6 +231,27 @@ class AstVarDecl(AstDecl):
 
 
 @attrs(frozen=True)
+class AstFunctionDecl(AstDecl):
+    attributes = attrib(type=List[AstAttribute])
+    id = attrib(type=str)
+    parameters = attrib(type=List[AstBinding])
+    returns = attrib(type=AstBinding)
+    body = attrib(type=Optional[AstExpr])
+
+    def __str__(s) -> str:
+        res = "function "
+        res += " ".join(map(str, s.attributes)) + " "
+        res += s.id
+        res += "(" + ",".join(map(str, s.parameters)) + ")"
+        res += "returns (" + str(s.returns) + ")"
+        if (s.body is not None):
+            res += "{" + str(s.body) + "}"
+        else:
+            res += ";"
+        return res
+
+
+@attrs(frozen=True)
 class AstAxiomDecl(AstDecl):
     attributes = attrib(type=List[AstAttribute])
     expr = attrib(type=AstExpr)
@@ -387,7 +408,7 @@ class AstBuilder(BoogieParser[AstNode]):
   def onBinding(s, prod: PE, st: str, loc: int, toks: PR) -> Iterable[AstNode]:
     ids = map(str, toks[0])
     typ = toks[1]
-    return [ AstBinding(tuple(ids), typ) ]
+    return [AstBinding(tuple(ids), typ)]
 
   def onTypeConstructorDecl(s, prod: PE, st: str, loc: int, toks: PR) -> Iterable[AstNode]:
     return [ AstTypeConstructorDecl(
@@ -476,6 +497,14 @@ class AstBuilder(BoogieParser[AstNode]):
     attributes = toks[0]
     expr = toks[1]
     return [AstAxiomDecl(attributes, expr)]
+
+  def onFunctionDecl(s, prod: PE, st: str, loc: int, toks: PR) -> Iterable[AstNode]:
+    attributes = toks[0]
+    id = toks[1]
+    (type_args, parameters, returns) = toks[2]
+    assert len(type_args) == 0
+    body = toks[3] if len(toks) == 4 else None
+    return [AstFunctionDecl(listify(attributes), id, listify(parameters), returns, body)]
 
   def onConstDecl(s, prod: PE, st: str, loc: int, toks: PR) -> Iterable[AstNode]:
     attributes = toks[0]

@@ -29,6 +29,7 @@ class BoogieParser(Generic[T]):
   def onCallAssignStmt(s, prod: "ParserElement[T]", st: str, loc: int, toks:"ParseResults[T]") -> "Iterable[T]": raise Exception("NYI")
   def onProgram(s, prod: "ParserElement[T]", st: str, loc: int, toks:"ParseResults[T]") -> "Iterable[T]": raise Exception("NYI")
   def onVarDecl(s, prod: "ParserElement[T]", st: str, loc: int, toks:"ParseResults[T]") -> "Iterable[T]": raise Exception("NYI")
+  def onFunctionDecl(s, prod: "ParserElement[T]", st: str, loc: int, toks:"ParseResults[T]") -> "Iterable[T]": raise Exception("NYI")
   def onAxiomDecl(s, prod: "ParserElement[T]", st: str, loc: int, toks:"ParseResults[T]") -> "Iterable[T]": raise Exception("NYI")
   def onConstDecl(s, prod: "ParserElement[T]", st: str, loc: int, toks:"ParseResults[T]") -> "Iterable[T]": raise Exception("NYI")
   def onImplementationDecl(s, prod: "ParserElement[T]", st: str, loc: int, toks:"ParseResults[T]") -> "Iterable[T]": raise Exception("NYI")
@@ -247,13 +248,17 @@ class BoogieParser(Generic[T]):
     s.Expr << (s.BoolExpr ^ s.RelExpr ^ s.ArithExpr ) #pylint: disable=pointless-statement
 
     ####### Function Declarations
-    s.FArgName = s.Id + s.COLN
-    s.FArg = s.FArgName + s.Type
-    s.FSig = O(s.TypeArgs) + s.LPARN + csl(s.FArg) + \
-            s.RPARN + s.RETURNS + s.LPARN + s.FArg + s.RPARN
-    s.FunctionDecl = s.FUNCTION + s.AttrList + s.Id + s.FSig + s.SEMI |\
-                     s.FUNCTION + s.AttrList + s.Id + s.FSig + s.SEMI +\
-                        s.LBRAC + s.Expr + s.RBRAC
+    s.FArgName = s.Id + S(s.COLN)
+    s.FArg = G(O(s.FArgName)) + s.Type
+    s.FArg.setParseAction(
+            lambda st, loc, toks: s.onBinding(s.FArg, st, loc, toks))
+    s.FSig = G(O(s.TypeArgs)) + S(s.LPARN) + G(O(csl(s.FArg))) + \
+            S(s.RPARN) + S(s.RETURNS) + S(s.LPARN) + s.FArg + S(s.RPARN)
+    s.FunctionDecl = S(s.FUNCTION) + G(s.AttrList) + s.Id + G(s.FSig) + S(s.SEMI) |\
+                     S(s.FUNCTION) + G(s.AttrList) + s.Id + G(s.FSig) +\
+                        S(s.LBRAC) + s.Expr + S(s.RBRAC)
+    s.FunctionDecl.setParseAction(
+            lambda st, loc, toks: s.onFunctionDecl(s.FunctionDecl, st, loc, toks))
 
     ####### Axiom Declarations
     s.AxiomDecl = s.AXIOM + s.AttrList + s.Expr + s.SEMI
