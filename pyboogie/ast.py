@@ -191,6 +191,21 @@ class AstGoto(AstStmt):
     labels = attrib(type=List[LabelT])
     def __str__(s) -> str: return "goto " + ",".join(map(str, s.labels)) + ";"
 
+
+@attrs(frozen=True)
+class AstCall(AstStmt):
+    attributes = attrib(type=List[AstAttribute])
+    lhs = attrib(type=Optional[List[str]])
+    id = attrib(type=str)
+    arguments = attrib(type=List[AstExpr])
+
+    def __str__(s) -> str:
+        res = "call "
+        if s.lhs is not None:
+            res += ",".join(s.lhs) + ":="
+        res += s.id + "(" + ",".join(map(str, s.arguments)) + ");"
+        return res
+
 # Functions
 @attrs(frozen=True)
 class AstBody(AstNode):
@@ -403,12 +418,19 @@ class AstBuilder(BoogieParser[AstNode]):
     return [ AstGoto([x.name for x in clcast(toks, AstId)]) ]
   def onAssignment(s, prod: PE, st: str, loc: int, toks: PR) -> Iterable[AstNode]:
     assert (len(toks) == 2)
-    assert (len(toks[0]) == 1)
     assert (len(toks[1]) == 1)
     return [ AstAssignment(toks[0][0], toks[1][0]) ]
   def onHavoc(s, prod: PE, st: str, loc: int, toks: PR) -> Iterable[AstNode]:
     assert (len(toks) > 0)
     return [ AstHavoc(clcast(toks, AstId)) ]
+
+  def onCallAssignStmt(s, prod: PE, st: str, loc: int, toks: PR) -> Iterable[AstNode]:
+    attributes = toks[0]
+    lhs = toks[1]
+    id = toks[2]
+    arguments = toks[3]
+    return [AstCall(attributes, lhs, id, arguments)]
+
   def onProgram(s, prod: PE, st: str, loc: int, toks: PR) -> Iterable[AstNode]:
     decls = [ccast(x, AstDecl) for x in toks] # type: List[AstDecl] 
     return [ AstProgram(decls) ]

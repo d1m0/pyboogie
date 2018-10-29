@@ -26,6 +26,7 @@ class BoogieParser(Generic[T]):
   def onGoto(s, prod: "ParserElement[T]", st: str, loc: int, toks:"ParseResults[T]") -> "Iterable[T]": raise Exception("NYI")
   def onAssignment(s, prod: "ParserElement[T]", st: str, loc: int, toks:"ParseResults[T]") -> "Iterable[T]": raise Exception("NYI")
   def onHavoc(s, prod: "ParserElement[T]", st: str, loc: int, toks:"ParseResults[T]") -> "Iterable[T]": raise Exception("NYI")
+  def onCallAssignStmt(s, prod: "ParserElement[T]", st: str, loc: int, toks:"ParseResults[T]") -> "Iterable[T]": raise Exception("NYI")
   def onProgram(s, prod: "ParserElement[T]", st: str, loc: int, toks:"ParseResults[T]") -> "Iterable[T]": raise Exception("NYI")
   def onVarDecl(s, prod: "ParserElement[T]", st: str, loc: int, toks:"ParseResults[T]") -> "Iterable[T]": raise Exception("NYI")
   def onAxiomDecl(s, prod: "ParserElement[T]", st: str, loc: int, toks:"ParseResults[T]") -> "Iterable[T]": raise Exception("NYI")
@@ -320,8 +321,10 @@ class BoogieParser(Generic[T]):
     s.HavocStmt.setParseAction(
             lambda st, loc, toks: s.onHavoc(s.HavocStmt, st, loc, toks))
 
-    s.CallAssignStmt = s.CALL + O(s.AttrList) + O(s.CallLhs) + s.Id + s.LPARN + csl(s.Expr) +\
-            s.RPARN + S(s.SEMI)
+    s.CallAssignStmt = S(s.CALL) + G(O(s.AttrList)) + G(O(s.CallLhs)) + s.Id +\
+            S(s.LPARN) + G(O(csl(s.Expr))) + S(s.RPARN) + S(s.SEMI)
+    s.CallAssignStmt.setParseAction(
+            lambda st, loc, toks: s.onCallAssignStmt(s.CallAssignStmt, st, loc, toks))
     s.CallForallStmt = s.CALL + s.FORALL + s.Id + s.LPARN + \
             csl(s.WildcardExpr) + s.RPARN + S(s.SEMI)
 
