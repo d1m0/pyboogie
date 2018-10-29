@@ -106,9 +106,11 @@ def propagateUnmodifiedPreds(fun: Function) -> DFlowStateT[PredicateSetT]:
     """
     def assignment_preds(stmt: AstAssignment) -> Set[AstExpr]:
       """ Compute predicate x = expr from assignment x:=expr if x is not in expr """
-      assert isinstance(stmt.lhs, AstId) # m[X] := ..; re-writen to m = update(m, x, ...)
-      return set([AstBinExpr(stmt.lhs, "==", stmt.rhs)]) \
-        if str(stmt.lhs) not in expr_read(stmt.rhs) else set()
+      assert all(isinstance(x, AstId) for x in stmt.lhs)
+      read = stmt_read(stmt)
+      return set([AstBinExpr(lhs, "==", rhs)
+                  for (lhs, rhs) in zip(stmt.lhs, stmt.rhs)
+                  if lhs not in read])
 
     def filterModifiedPreds(preds: PredicateSetT, stmt: AstStmt) -> Set[AstExpr]: 
       """ Remove predicates using any of the clobbered_vars """

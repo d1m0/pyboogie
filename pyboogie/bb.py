@@ -1,10 +1,11 @@
 from .ast import parseAst, AstImplementation, AstLabel, \
         AstAssert, AstAssume, AstHavoc, AstAssignment, AstGoto, \
         AstReturn, AstNode, AstStmt, AstType, AstProgram, AstMapIndex,\
-        AstMapUpdate, AstId, parseType, parseStmt, LabelT
+        AstMapUpdate, AstId, parseType, parseStmt, LabelT, AstExpr
 from collections import namedtuple
 from .util import unique, get_uid, ccast
-from typing import Dict, List, Iterable, Tuple, Iterator, Any, Set, Optional
+from typing import Dict, List, Iterable, Tuple, Iterator, Any, Set, Optional, \
+        Union
 from json import loads
 
 Bindings_T = List[Tuple[str, AstType]]
@@ -316,16 +317,20 @@ class Function(object):
                 if (not isinstance(stmt, AstAssignment)):
                     continue
 
-                lhs = stmt.lhs
-                rhs = stmt.rhs
+                lhsL: List[Union[AstId, AstMapIndex]] = []
+                rhsL: List[AstExpr] = []
 
-                while (isinstance(lhs, AstMapIndex)):
-                    rhs = AstMapUpdate(lhs.map, lhs.index, rhs)
-                    assert (isinstance(lhs.map, AstMapIndex) or 
-                            isinstance(lhs.map, AstId))
-                    lhs = lhs.map
+                for (lhs, rhs) in zip(stmt.lhs, stmt.rhs):
+                    while (isinstance(lhs, AstMapIndex)):
+                        rhs = AstMapUpdate(lhs.map, lhs.index, rhs)
+                        assert (isinstance(lhs.map, AstMapIndex) or
+                                isinstance(lhs.map, AstId))
+                        lhs = lhs.map
 
-                bb[stmt_idx] = AstAssignment(ccast(lhs, AstId), rhs)
+                    lhsL.append(lhs)
+                    rhsL.append(rhs)
+
+                bb[stmt_idx] = AstAssignment(lhsL, rhsL)
 
     def to_json(self) -> Any:
         """ Convert self to a JSON-like python object. If you want a string

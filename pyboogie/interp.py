@@ -239,9 +239,10 @@ def interp_one(state: State, rand: RandF) -> Iterable[State]:
       for var_id in stmt.ids:
         store[var_id.name] = rand(state, var_id.name)
     elif isinstance(stmt, AstAssignment):
-      v = eval_quick(stmt.rhs, store)
+      vals = [eval_quick(expr, store) for expr in stmt.rhs]
       store = copy(store)
-      store[ccast(stmt.lhs, AstId).name] = v
+      for (id, val) in zip(stmt.lhs, vals):
+          store[ccast(id, AstId).name] = val
     else:
       assert False, "Can't handle statement {}".format(stmt)
 

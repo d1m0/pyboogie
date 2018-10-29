@@ -39,7 +39,7 @@ class TestAst(TestCase):
             AstProgram([
                 AstImplementation("main", [], [],
                     AstBody([AstBinding(("x",), AstIntType())],
-                    [AstAssignment(AstId('x'), AstBinExpr(AstId("x"), "+", AstNumber(42)))]))])
+                    [AstAssignment([AstId('x')], [AstBinExpr(AstId("x"), "+", AstNumber(42))])]))])
         ),
 
     ]

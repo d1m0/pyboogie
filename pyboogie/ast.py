@@ -173,9 +173,10 @@ class AstAssume(AstOneExprStmt):
 
 @attrs(frozen=True)
 class AstAssignment(AstStmt):
-    lhs = attrib(type=Union[AstId, AstMapIndex])
-    rhs = attrib(type=AstExpr)
-    def __str__(s) -> str: return str(s.lhs) + " := " + stripOutsideParenthesis(s.rhs) + ";"
+    lhs = attrib(type=List[Union[AstId, AstMapIndex]])
+    rhs = attrib(type=List[AstExpr])
+    def __str__(s) -> str:
+        return ",".join(map(str, s.lhs)) + " := " + ",".join(map(stripOutsideParenthesis, s.rhs)) + ";"
 
 @attrs(frozen=True)
 class AstHavoc(AstStmt):
@@ -417,9 +418,7 @@ class AstBuilder(BoogieParser[AstNode]):
     assert(len(toks) > 0)
     return [ AstGoto([x.name for x in clcast(toks, AstId)]) ]
   def onAssignment(s, prod: PE, st: str, loc: int, toks: PR) -> Iterable[AstNode]:
-    assert (len(toks) == 2)
-    assert (len(toks[1]) == 1)
-    return [ AstAssignment(toks[0][0], toks[1][0]) ]
+    return [ AstAssignment(listify(toks[0]), listify(toks[1])) ]
   def onHavoc(s, prod: PE, st: str, loc: int, toks: PR) -> Iterable[AstNode]:
     assert (len(toks) > 0)
     return [ AstHavoc(clcast(toks, AstId)) ]
@@ -624,8 +623,8 @@ def stmt_read(ast: AstStmt) -> Set[str]:
         return expr_read(ast.expr)
     elif isinstance(ast, AstAssignment):
         # Map assignments should be re-written using MapUpdate syntax
-        assert isinstance(ast.lhs, AstId)
-        return expr_read(ast.rhs)
+        assert all(isinstance(x, AstId) for x in ast.lhs)
+        return reduce(lambda acc, x: acc.union(expr_read(x)), ast.rhs, set())
     elif isinstance(ast, AstHavoc):
         return set()
     else:
@@ -637,8 +636,8 @@ def stmt_changed(ast: AstStmt) -> Set[str]:
 
     if isinstance(ast, AstAssignment):
         # Map assignments should be re-written using MapUpdate syntax
-        assert isinstance(ast.lhs, AstId), "Bad lhs: {}".format(ast.lhs)
-        return set([ast.lhs.name])
+        assert all(isinstance(x, AstId) for x in ast.lhs), "Bad lhs: {}".format(ast.lhs)
+        return set(map(str, ast.lhs))
     elif isinstance(ast, AstHavoc):
         return set([x.name for x in ast.ids])
     elif isinstance(ast, AstAssume) or isinstance(ast, AstAssert):

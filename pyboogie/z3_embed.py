@@ -578,9 +578,12 @@ def stmt_to_z3(stmt: AstNode, typeEnv: Z3TypeEnv) -> z3.ExprRef:
         stmt = stmt.stmt
 
     if (isinstance(stmt, AstAssignment)):
-        lvalue = typeEnv[ccast(stmt.lhs, AstId).name](str(stmt.lhs))
-        rhs = expr_to_z3(stmt.rhs, typeEnv)
-        return _force_expr(lvalue == rhs)
+        eqs: List[z3.ExprRef] = []
+        for (lhs, rhs) in zip(stmt.lhs, stmt.rhs):
+            lvalue = typeEnv[ccast(lhs, AstId).name](str(lhs))
+            rvalue = expr_to_z3(rhs, typeEnv)
+            eqs.append(_force_expr(lvalue == rvalue))
+        return And(*eqs)
     elif (isinstance(stmt, AstAssert)):
         return (expr_to_z3(stmt.expr, typeEnv))
     elif (isinstance(stmt, AstAssume)):

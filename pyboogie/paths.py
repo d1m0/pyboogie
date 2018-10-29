@@ -201,8 +201,8 @@ def nd_bb_path_to_ssa(p: NondetPath, ssa_env: SSAEnv, cur_p: str = "") -> Tuple[
                     else:
                         old_var = old_varm[s]
 
-                    bb_stmts.append(AstAssignment(AstId(ssa_env.lookup(s)),
-                                                  AstId(old_var)))
+                    bb_stmts.append(AstAssignment([AstId(ssa_env.lookup(s))],
+                                                  [AstId(old_var)]))
                     bb_replmps.append(sub_env.replm())
 
                 bb = BB(bb_name, [], bb_stmts, set(), True)
@@ -216,9 +216,9 @@ def ssa_stmt(stmt: AstStmt, prev_replm: ReplMap_T, cur_replm: ReplMap_T) -> AstS
     if isinstance(stmt, AstHavoc):
         return AstAssert(AstTrue())
     if isinstance(stmt, AstAssignment):
-        lhs = replace(stmt.lhs, cur_replm)
-        rhs = replace(stmt.rhs, prev_replm)
-        return AstAssignment(ccast(lhs, AstId),ccast(rhs, AstExpr))
+        lhs: List[Union[AstId, AstMapIndex]] = [ccast(replace(x, cur_replm), AstId) for x in stmt.lhs]
+        rhs: List[AstExpr] = [ccast(replace(x, prev_replm), AstExpr) for x in stmt.rhs]
+        return AstAssignment(lhs, rhs)
     else:
         return ccast(replace(stmt, cur_replm), AstStmt)
 
