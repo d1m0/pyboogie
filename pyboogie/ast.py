@@ -156,7 +156,7 @@ def stripOutsideParenthesis(e: AstExpr) -> str:
 class AstStmt(AstNode): pass
 
 @attrs(frozen=True)
-class AstLabel(AstNode):
+class AstLabel(AstStmt):
     label = attrib(type=str)
     stmt = attrib(type=AstStmt)
     def __str__(s) -> str: return str(s.label) + " : " + str(s.stmt)
@@ -205,6 +205,25 @@ class AstCall(AstStmt):
         if s.lhs is not None:
             res += ",".join(s.lhs) + ":="
         res += s.id + "(" + ",".join(map(str, s.arguments)) + ");"
+        return res
+
+# Non-Simple Statements
+@attrs(frozen=True)
+class If(AstStmt):
+    condition = attrib(type=AstExpr)
+    thenS = attrib(type=List[AstStmt])
+    elseS = attrib(type=Optional[Union[List[AstStmt], AstStmt]])
+
+    def __str__(s) -> str:
+        res = "if (" + str(s.condition) + ") {\n"
+        res += "\n".join(map(str, s.thenS)) + '\n}'
+        if s.elseS is None:
+            return res
+
+        if isinstance(s.elseS, AstStmt):
+            res += ' else ' + str(s.elseS)
+        else:
+            res += ' else {\n' + '\n'.join(map(str, s.elseS)) + '\n}'
         return res
 
 # Functions
@@ -486,7 +505,7 @@ class AstBuilder(BoogieParser[AstNode]):
     return [ ccast(toks[0], AstType) ]
   def onBody(s, prod: PE, st: str, loc: int, toks: PR) -> Iterable[AstNode]:
     assert len(toks) == 2
-    return [ AstBody(listify(toks[0]), listify(toks[1])) ]
+    return [AstBody(clcast(toks[0], AstBinding), clcast(toks[1], AstStmt))]
 
   def onVarDecl(s, prod: PE, st: str, loc: int, toks: PR) -> Iterable[AstNode]:
     attributes = toks[0]

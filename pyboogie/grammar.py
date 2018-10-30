@@ -101,6 +101,7 @@ class BoogieParser(Generic[T]):
     s.COMPLETE = K("complete")
     s.UNIQUE = K("unique")
     s.IF = K("if")
+    s.THEN = K("then")
     s.ELSE = K("else")
     s.FREE = K("free")
     s.INVARIANT = K("invariant")
@@ -205,11 +206,13 @@ class BoogieParser(Generic[T]):
     s.Quantified.setParseAction(
             lambda st, loc, toks:  s.onQuantified(s.Old, st, loc, toks))
 
+    s.Ternary = s.IF + s.Expr + s.THEN + s.Expr + s.ELSE + s.Expr
+
     s.AtomIdCont = F()
     s.AtomId = s.Id + O(s.AtomIdCont)
     s.AtomId.setParseAction(
             lambda st, loc, toks:  s.onAtom(s.Id, st, loc, toks))
-    s.Atom = (s.Primitive | s.Old | s.AtomId) # type: ParserElement[T]
+    s.Atom = (s.Ternary | s.Primitive | s.Old | s.AtomId) # type: ParserElement[T]
     s.MapUpdateArgs = S(s.LSQBR) + s.Expr + s.ASSGN + s.Expr + S(s.RSQBR)
     s.MapUpdateArgs.setParseAction(
             lambda st, loc, toks:  s.onMapUpdateArgs(s.Old, st, loc, toks))
@@ -297,11 +300,11 @@ class BoogieParser(Generic[T]):
 
     s.IfStmt = F() # type: Union[F, ParserElement[T]]
     s.Else = s.ELSE + s.BlockStmt | s.ELSE + s.IfStmt
-    s.IfStmt << s.IF + s.LBRAC + s.WildcardExpr + s.RBRAC + s.BlockStmt + \
+    s.IfStmt << s.IF + s.LPARN + s.WildcardExpr + s.RPARN + s.BlockStmt + \
             O(s.Else)
 
     s.CallLhs = csl(s.Id) + s.ASSGN
-    s.Lhs =  s.Id + ZoM(s.MapIndexArgs)
+    s.Lhs = s.Id + ZoM(s.MapIndexArgs)
     s.Lhs.setParseAction(
         lambda st, loc, toks: s.onAtom(s.Id, st, loc, toks))
     s.Label = s.Id | s.Number
@@ -393,7 +396,8 @@ class BoogieParser(Generic[T]):
     s.Program = ZoM(s.Decl) # type: ParserElement[T]
     s.Program.setParseAction(
             lambda st, loc, toks: s.onProgram(s.Program, st, loc, toks))
-    s.Program.ignore(L("//") + restOfLine)
+    s.Comment = S(L("//") + restOfLine)
+    s.Program.ignore(s.Comment)
 
   def parseExpr(s, st:str) -> T:
     return (s.Expr + StringEnd()).parseString(st)[0]
@@ -402,7 +406,7 @@ class BoogieParser(Generic[T]):
     return (s.LStmt + StringEnd()).parseString(st)[0]
 
   def parseProgram(s, st:str) -> T:
-    return (s.Program + StringEnd()).parseString(st)[0]
+    return (s.Program + ZoM(s.Comment) + StringEnd()).parseString(st)[0]
 
   def parseBinding(s, st:str) -> Iterable[T]:
     return (s.IdsType + StringEnd()).parseString(st)
