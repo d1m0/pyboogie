@@ -70,6 +70,10 @@ class AstId(AstExpr):
     def __str__(s) -> str: return s.name
 
 @attrs(frozen=True)
+class AstWildcard(AstExpr):
+    def __str__(s) -> str: return "*"
+
+@attrs(frozen=True)
 class AstMapIndex(AstExpr):
     map = attrib(type=AstExpr)
     index = attrib(type=AstExpr)
@@ -114,6 +118,14 @@ class AstBinExpr(AstExpr):
     rhs = attrib(type=AstExpr)
     def __str__(s) -> str:
         return "(" + str(s.lhs) + " " + str(s.op) + " " + str(s.rhs) + ")"
+
+@attrs(frozen=True)
+class AstTernary(AstExpr):
+    condition = attrib(type=AstExpr)
+    thenE = attrib(type=AstExpr)
+    elseE = attrib(type=AstExpr)
+    def __str__(s) -> str:
+        return "if (" + str(s.condition) + ") then " + str(s.thenE) + " else " + str(s.elseE)
 
 @attrs(frozen=True)
 class AstAttribute(AstNode):
@@ -209,7 +221,7 @@ class AstCall(AstStmt):
 
 # Non-Simple Statements
 @attrs(frozen=True)
-class If(AstStmt):
+class AstIf(AstStmt):
     condition = attrib(type=AstExpr)
     thenS = attrib(type=List[AstStmt])
     elseS = attrib(type=Optional[Union[List[AstStmt], AstStmt]])
@@ -397,6 +409,8 @@ class AstBuilder(BoogieParser[AstNode]):
         elif (isinstance(cont, AstFuncExprArgs)):
             assert (isinstance(res, AstId))
             res = AstFuncExpr(res.name, cont.args)
+        else:
+            assert False, "Unexpected token after id: " + str(cont)
 
       return [res]
 
@@ -469,6 +483,18 @@ class AstBuilder(BoogieParser[AstNode]):
     id = toks[2]
     arguments = toks[3]
     return [AstCall(attributes, lhs, id, arguments)]
+
+  def onIfStmt(s, prod: PE, st: str, loc: int, toks: PR) -> Iterable[AstNode]:
+    elseNode: Optional[Union[List[AstStmt], AstStmt]] = None
+    if len(toks) == 3:
+        if isinstance(toks[2], AstStmt):
+            elseNode = ccast(toks[2], AstIf)
+        else:
+            elseNode = clcast(toks[2], AstStmt)
+
+    return [AstIf(ccast(toks[0], AstExpr),
+                  clcast(toks[1], AstStmt),
+                  elseNode)]
 
   def onProgram(s, prod: PE, st: str, loc: int, toks: PR) -> Iterable[AstNode]:
     decls = [ccast(x, AstDecl) for x in toks] # type: List[AstDecl] 
@@ -604,6 +630,15 @@ class AstBuilder(BoogieParser[AstNode]):
     expr = toks[2]
     assert quantifier == "forall", "Existential quantification NYI"
     return [AstForallExpr(tuple(bindings), ccast(expr, AstExpr))]
+  def onWildcardExpr(s, prod: PE, st: str, loc: int, toks: PR) -> Iterable[AstNode]:
+    if len(toks) == 1 and str(toks[0]) == "*":
+        return [AstWildcard()]
+
+    return toks
+  def onTernary(s, prod: PE, st: str, loc: int, toks: PR) -> Iterable[AstNode]:
+    return [AstTernary(ccast(toks[0], AstExpr),
+                      ccast(toks[1], AstExpr),
+                      ccast(toks[2], AstExpr))]
 
 astBuilder = AstBuilder()
 

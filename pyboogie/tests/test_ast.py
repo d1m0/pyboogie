@@ -5,9 +5,11 @@ These tests focus on the core subset of boogie supported.
 from unittest import TestCase
 from ..grammar import BoogieParser
 from ..ast import parseAst, parseExprAst, AstProgram, AstImplementation,\
-    AstBody, AstBinding, AstIntType, AstAssignment, AstId, AstBinExpr, AstNumber, replace,\
-    AstMapIndex, AstMapUpdate, AstFuncExpr, AstMapType, AstBoolType, AstBVType, AstCompoundType,\
-    parseType, AstTypeConstructorDecl, astBuilder, AstAttribute
+    AstBody, AstBinding, AstIntType, AstAssignment, AstId, AstBinExpr, \
+    AstNumber, replace, AstMapIndex, AstMapUpdate, AstFuncExpr, AstMapType, \
+    AstBoolType, AstBVType, AstCompoundType, parseType, \
+    AstTypeConstructorDecl, astBuilder, AstAttribute, AstAssert, AstAssume,\
+    AstIf, AstWildcard, AstTernary
 from pyparsing import ParseException, StringEnd
 
 class TestAst(TestCase):
@@ -41,7 +43,127 @@ class TestAst(TestCase):
                     AstBody([AstBinding(("x",), AstIntType())],
                     [AstAssignment([AstId('x')], [AstBinExpr(AstId("x"), "+", AstNumber(42))])]))])
         ),
+        (
+            """
+                implementation main() {
+                    var x: int;
+                    x := 42;
+                    assert x == 42;
+                }
+            """,
+            AstProgram([
+                AstImplementation("main", [], [],
+                    AstBody([AstBinding(("x",), AstIntType())],
+                    [AstAssignment([AstId('x')], [AstNumber(42)]),
+                     AstAssert(AstBinExpr(AstId("x"), "==", AstNumber(42)))]))])
+        ),
+        (
+            """
+                implementation main() {
+                    var x: int;
+                    assume x == 42;
+                }
+            """,
+            AstProgram([
+                AstImplementation("main", [], [],
+                    AstBody([AstBinding(("x",), AstIntType())],
+                    [AstAssume(AstBinExpr(AstId("x"), "==", AstNumber(42)))]))])
+        ),
+        (
+            """
+                implementation main() {
+                    var x: int;
+                    x:= if x > 0 then 1 else 2;
+                }
+            """,
+            AstProgram([
+                AstImplementation("main", [], [],
+                    AstBody([AstBinding(("x",), AstIntType())],
+                    [AstAssignment([AstId('x')],
+                        [AstTernary(AstBinExpr(AstId("x"), ">", AstNumber(0)),
+                               AstNumber(1), AstNumber(2))])]))])
+        ),
+        (
+            """
+                implementation main() {
+                    var x: int;
+                    if (x>0) {
+                        x := 1;
+                    } else {
+                        x := 2;
+                    }
+                }
+            """,
+            AstProgram([
+                AstImplementation("main", [], [],
+                    AstBody([AstBinding(("x",), AstIntType())],
+                    [AstIf(AstBinExpr(AstId("x"), ">", AstNumber(0)),
+                        [AstAssignment([AstId('x')], [AstNumber(1)])],
+                        [AstAssignment([AstId('x')], [AstNumber(2)])])]))])
 
+        ),
+        (
+            """
+                implementation main() {
+                    var x: int;
+                    if (x>0) {
+                        x := 1;
+                    }
+                }
+            """,
+            AstProgram([
+                AstImplementation("main", [], [],
+                    AstBody([AstBinding(("x",), AstIntType())],
+                    [AstIf(AstBinExpr(AstId("x"), ">", AstNumber(0)),
+                        [AstAssignment([AstId('x')], [AstNumber(1)])],
+                        None)]))])
+        ),
+        (
+            """
+                implementation main() {
+                    var x: int;
+                    if (x>0) {
+                        x := 1;
+                    } else if (x==0) {
+                        x := 0;
+                    }
+                }
+            """,
+            AstProgram([
+                AstImplementation("main", [], [],
+                    AstBody([AstBinding(("x",), AstIntType())],
+                    [AstIf(AstBinExpr(AstId("x"), ">", AstNumber(0)),
+                        [AstAssignment([AstId('x')], [AstNumber(1)])],
+                        AstIf(AstBinExpr(AstId("x"), "==", AstNumber(0)),
+                              [AstAssignment([AstId('x')], [AstNumber(0)])],
+                              None))
+                    ]))
+            ])
+        ),
+        (
+            """
+                implementation main() {
+                    var x: int;
+                    if (x>0) {
+                        x := 1;
+                    } else if (x==0) {
+                        x := 0;
+                    } else {
+                        x := 4;
+                    }
+                }
+            """,
+            AstProgram([
+                AstImplementation("main", [], [],
+                    AstBody([AstBinding(("x",), AstIntType())],
+                    [AstIf(AstBinExpr(AstId("x"), ">", AstNumber(0)),
+                        [AstAssignment([AstId('x')], [AstNumber(1)])],
+                        AstIf(AstBinExpr(AstId("x"), "==", AstNumber(0)),
+                              [AstAssignment([AstId('x')], [AstNumber(0)])],
+                              [AstAssignment([AstId('x')], [AstNumber(4)])]))
+                    ]))
+            ])
+        ),
     ]
     def test_bad_parse(self):
         """ Make sure parseAst doesn't fail silently

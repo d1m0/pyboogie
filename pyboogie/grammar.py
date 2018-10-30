@@ -27,6 +27,7 @@ class BoogieParser(Generic[T]):
   def onAssignment(s, prod: "ParserElement[T]", st: str, loc: int, toks:"ParseResults[T]") -> "Iterable[T]": raise Exception("NYI")
   def onHavoc(s, prod: "ParserElement[T]", st: str, loc: int, toks:"ParseResults[T]") -> "Iterable[T]": raise Exception("NYI")
   def onCallAssignStmt(s, prod: "ParserElement[T]", st: str, loc: int, toks:"ParseResults[T]") -> "Iterable[T]": raise Exception("NYI")
+  def onIfStmt(s, prod: "ParserElement[T]", st: str, loc: int, toks:"ParseResults[T]") -> "Iterable[T]": raise Exception("NYI")
   def onProgram(s, prod: "ParserElement[T]", st: str, loc: int, toks:"ParseResults[T]") -> "Iterable[T]": raise Exception("NYI")
   def onVarDecl(s, prod: "ParserElement[T]", st: str, loc: int, toks:"ParseResults[T]") -> "Iterable[T]": raise Exception("NYI")
   def onFunctionDecl(s, prod: "ParserElement[T]", st: str, loc: int, toks:"ParseResults[T]") -> "Iterable[T]": raise Exception("NYI")
@@ -53,6 +54,8 @@ class BoogieParser(Generic[T]):
   def onLABinOp(s, prod: "ParserElement[T]", st: str, loc: int, toks:"ParseResults[T]") -> "Iterable[T]": raise Exception("NYI")
   def onRABinOp(s, prod: "ParserElement[T]", st: str, loc: int, toks:"ParseResults[T]") -> "Iterable[T]": raise Exception("NYI")
   def onNABinOp(s, prod: "ParserElement[T]", st: str, loc: int, toks:"ParseResults[T]") -> "Iterable[T]": raise Exception("NYI")
+  def onTernary(s, prod: "ParserElement[T]", st: str, loc: int, toks:"ParseResults[T]") -> "Iterable[T]": raise Exception("NYI")
+  def onWildcardExpr(s, prod: "ParserElement[T]", st: str, loc: int, toks:"ParseResults[T]") -> "Iterable[T]": raise Exception("NYI")
 
   def __init__(s) -> None:
     s.LT = L("<")
@@ -206,7 +209,9 @@ class BoogieParser(Generic[T]):
     s.Quantified.setParseAction(
             lambda st, loc, toks:  s.onQuantified(s.Old, st, loc, toks))
 
-    s.Ternary = s.IF + s.Expr + s.THEN + s.Expr + s.ELSE + s.Expr
+    s.Ternary = S(s.IF) + s.Expr + S(s.THEN) + s.Expr + S(s.ELSE) + s.Expr
+    s.Ternary.setParseAction(
+        lambda st, loc, toks: s.onTernary(s.Ternary, st, loc, toks))
 
     s.AtomIdCont = F()
     s.AtomId = s.Id + O(s.AtomIdCont)
@@ -293,15 +298,20 @@ class BoogieParser(Generic[T]):
 
     s.StmtList = F()
     s.WildcardExpr = s.Expr | s.STAR
+    s.WildcardExpr.setParseAction(
+            lambda st, loc, toks: s.onWildcardExpr(s.WildcardExpr,
+                                                   st, loc, toks))
 
-    s.BlockStmt = s.LBRAC + s.StmtList + s.RBRAC
+    s.BlockStmt = S(s.LBRAC) + G(s.StmtList) + S(s.RBRAC)
 
     s.LoopInv = O(s.FREE) + s.INVARIANT + s.Expr + s.SEMI
 
     s.IfStmt = F() # type: Union[F, ParserElement[T]]
-    s.Else = s.ELSE + s.BlockStmt | s.ELSE + s.IfStmt
-    s.IfStmt << s.IF + s.LPARN + s.WildcardExpr + s.RPARN + s.BlockStmt + \
+    s.Else = S(s.ELSE) + s.BlockStmt | S(s.ELSE) + s.IfStmt
+    s.IfStmt << S(s.IF) + S(s.LPARN) + s.WildcardExpr + S(s.RPARN) + s.BlockStmt + \
             O(s.Else)
+    s.IfStmt.setParseAction(
+        lambda st, loc, toks: s.onIfStmt(s.IfStmt, st, loc, toks))
 
     s.CallLhs = csl(s.Id) + s.ASSGN
     s.Lhs = s.Id + ZoM(s.MapIndexArgs)
