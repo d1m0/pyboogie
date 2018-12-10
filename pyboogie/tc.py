@@ -1,14 +1,16 @@
-from .ast import AstProgram, AstProcedure, AstFunctionDecl, AstImplementation,\
-        AstDecl, AstBinding, AstNode, AstType, AstTypeConstructorDecl, \
-        AstBody, AstVarDecl, AstConstDecl, AstAxiomDecl
-
+# Types
 from .ast import AstIntType, AstBoolType, AstBVType, AstMapType, AstCompoundType
-
+# Expressions
 from .ast import AstExpr, AstFalse, AstTrue, AstNumber, AstId, AstWildcard,\
         AstMapIndex, AstMapUpdate, AstUnExpr, AstBinExpr, AstTernary,\
         AstForallExpr, AstFuncExpr
-
-from .ast import AstStmt
+# Statements
+from .ast import AstStmt, AstLabel, AstOneExprStmt, AstAssignment, \
+        AstHavoc, AstReturn, AstGoto, AstCall
+# Declarations
+from .ast import AstProgram, AstProcedure, AstFunctionDecl, AstImplementation,\
+        AstDecl, AstBinding, AstNode, AstType, AstTypeConstructorDecl, \
+        AstBody, AstVarDecl, AstConstDecl, AstAxiomDecl
 from typing import Union, Tuple, Optional, Any, Dict, Iterable, Generic, TypeVar, List
 
 AstScope=Union[AstProgram, AstBody]
@@ -46,7 +48,7 @@ class BMap(BType):
     def __str__(self):
         return "[{}]{}".format(str(self._domain), str(self._range))
 class BLambda(BType):
-    def __init__(self, args: Tuple[BType], ret: BType):
+    def __init__(self, args: Tuple[BType,...], ret: BType):
         self._args = args
         self._return = ret
     def __eq__(self, other):
@@ -56,7 +58,21 @@ class BLambda(BType):
     def __hash__(self):
         return hash((self._args, self._return))
     def __str__(self):
-        return "[{}]{}".format(str(self._args), str(self._return))
+        return "[{}]{}".format(",".join(map(str, self._args)), str(self._return))
+class BProcedure(BType):
+    """ Type of a procedure. Only used internally - not an actual type in
+        Boogie's type system. """
+    def __init__(self, args: Tuple[BType,...], rets: Tuple[BType, ...]):
+        self._args = args
+        self._returns = rets
+    def __eq__(self, other):
+        return isinstance(other, BMap) and \
+                self._args == other._args and \
+                self._returns == other._returns
+    def __hash__(self):
+        return hash((self._args, self._returns))
+    def __str__(self):
+        return "[{}]{}".format(str(self._args), str(self._returns))
 # TODO: User defined types
 
 class TypeError(Exception):
@@ -99,17 +115,21 @@ class Scope(Generic[ScopeT, DeclT]):
 # TODO: Update to support TypeSynonyms
 TypeScope=Scope[AstProgram, AstTypeConstructorDecl]
 # Function names are also defined at the Program level
-FunctionScope=Scope[AstProgram, AstFunctionDecl]
+FunctionScope=Scope[AstProgram, BLambda]
 # Constants and Variables can be defined at the Program or Procedure/Function
 # lvl
 VarScope=Scope[Union[AstProgram, AstBody, AstFunctionDecl, AstForallExpr], BType]
 # Procedures can be defined at the Program level
-ProcedureScope=Scope[Union[AstProgram], AstProcedure]
+ProcedureScope=Scope[Union[AstProgram], BProcedure]
 # Attributes don't have definition statements so we don't track them
 # Our type-checking environment is a tuple of the 4 different scopes
 TCEnv=Tuple[TypeScope, FunctionScope, VarScope, ProcedureScope]
 
 def tcType(node: AstType, env: TCEnv) -> BType:
+    """ Type check a type specification in a given environment. Check that any
+        identifiers in type constructors are in-scope and number of type
+        arguments for type constructors respect user definitions. Raise an 
+        error on failure. Return the checked BType on success."""
     if (isinstance(node, AstIntType)):
         return BInt()
     elif (isinstance(node, AstBoolType)):
@@ -127,6 +147,8 @@ def tcType(node: AstType, env: TCEnv) -> BType:
         assert False, "Unknown type: {}".format(node)
 
 def tcExpr(node: AstExpr, env: TCEnv) -> BType:
+    """ Type check an expression in a given environment and return the type of
+        the expression. Raise a TypeError on failure """
     (types, funcs, vars, procs) = env
     if isinstance(node, AstFalse) or isinstance(node, AstTrue):
         return BBool()
@@ -215,7 +237,7 @@ def tcExpr(node: AstExpr, env: TCEnv) -> BType:
         return tcExpr(node.expr, newEnv)
     elif isinstance(node, AstFuncExpr):
         argTypes = tuple([tcExpr(arg, env) for arg in node.ops])
-        funType = funcs.lookup(node.funcName)
+        funType: Optional[BType] = funcs.lookup(node.funcName)
         if (funType is None or not isinstance(funType, BLambda)):
             raise TypeError(node, "{} does not name a function".format(node.funcName))
 
@@ -227,9 +249,53 @@ def tcExpr(node: AstExpr, env: TCEnv) -> BType:
         assert False, "Unknown expr: {}".format(node)
         
 
-# TODO: TC Labels
 def tcStmt(node: AstStmt, env: TCEnv) -> None:
+    """ Type check a statement in a given environment. Raise a TypeError on
+        failure. """
     (types, funcs, vars, procs) = env
+    if (isinstance(node, AstLabel)):
+        # TODO: TC Labels
+        tcStmt(node.stmt, env)
+    elif (isinstance(node, AstOneExprStmt)):
+        exprType = tcExpr(node.expr, env)
+        if (exprType != BBool()):
+            raise TypeError(node, "Expected boolean expression in {}".format(node))
+    elif (isinstance(node, AstAssignment)):
+        lhsTypes = [tcExpr(lhsId, env) for lhsId in node.lhs]
+        rhsTypes = [tcExpr(rhsId, env) for rhsId in node.rhs]
+
+        if (lhsTypes != rhsTypes):
+            raise TypeError(node, "Type mismatch in assignment {}".format(node))
+    elif (isinstance(node, AstHavoc)):
+        for id in node.ids:
+            tcExpr(id, env)
+    elif (isinstance(node, AstReturn)):
+        pass
+    elif (isinstance(node, AstGoto)):
+        pass
+    elif (isinstance(node, AstCall)):
+        procType: Optional[BType] = procs.lookup(node.id)
+
+        if (procType is None):
+            raise TypeError(node, "Unknown procedure {} in call {}".format(node.id, node))
+
+        if (not isinstance(procType, BProcedure)):
+            raise TypeError(node, "{} not a procedure in call {}".format(node.id, node))
+
+        if (node.lhs is None):
+            expectedReturns: Tuple[BType,...] = ()
+        else:
+            expectedReturns = tuple([tcExpr(lhs, env) for lhs in node.lhs])
+
+        arguments = tuple([tcExpr(arg, env) for arg in node.arguments])
+
+        if (procType._args != arguments):
+            raise TypeError(node, "Mismatch in arguments in call {}".format(node.id, node))
+
+        if (procType._returns != expectedReturns):
+            raise TypeError(node, "Mismatch in arguments in call {}".format(node.id, node))
+    else:
+        assert False, "Unknown stmt: {}".format(node)
 
 
 def tc(node: AstStmt) -> None:

@@ -208,14 +208,14 @@ class AstGoto(AstStmt):
 @attrs(frozen=True)
 class AstCall(AstStmt):
     attributes = attrib(type=List[AstAttribute])
-    lhs = attrib(type=Optional[List[str]])
+    lhs = attrib(type=Optional[List[AstId]])
     id = attrib(type=str)
     arguments = attrib(type=List[AstExpr])
 
     def __str__(s) -> str:
         res = "call "
         if s.lhs is not None:
-            res += ",".join(s.lhs) + ":="
+            res += ",".join(map(str, s.lhs)) + ":="
         res += s.id + "(" + ",".join(map(str, s.arguments)) + ");"
         return res
 

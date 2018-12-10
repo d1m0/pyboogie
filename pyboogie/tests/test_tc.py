@@ -4,14 +4,14 @@ These tests focus on the core subset of boogie supported.
 """
 from unittest import TestCase
 from ..grammar import BoogieParser
-from ..ast import parseAst, parseExprAst, AstProgram, AstImplementation,\
+from ..ast import parseAst, parseExprAst, parseStmt, AstProgram, AstImplementation,\
     AstBody, AstBinding, AstIntType, AstAssignment, AstId, AstBinExpr, \
     AstNumber, replace, AstMapIndex, AstMapUpdate, AstFuncExpr, AstMapType, \
     AstBoolType, AstBVType, AstCompoundType, parseType, \
     AstTypeConstructorDecl, astBuilder, AstAttribute, AstAssert, AstAssume,\
     AstIf, AstWildcard, AstTernary
 from pyparsing import ParseException, StringEnd
-from ..tc import tcExpr, TypeError, BType, BInt, BBool, Scope, BMap, BLambda
+from ..tc import tcExpr, tcStmt, TypeError, BType, BInt, BBool, Scope, BMap, BLambda, BProcedure
 from typing import List, Tuple, Any
 
 class TestExprTC(TestCase):
@@ -54,3 +54,80 @@ class TestExprTC(TestCase):
             typ = tcExpr(expr, env)
 
             assert typ == expType, "Expected {} got {}".format(expType, typ)
+
+    def testBadExprs(self):
+        """ Make sure expr tc raises exceptions on type errors
+        """
+        for (exprText, expType, (vars, funs)) in self.badExprs:
+            expr = parseExprAst(exprText)
+            varScope = Scope(None, None)
+            funScope = Scope(None, None)
+            for (name, typ) in vars:
+                varScope.define(name, typ)
+            for (name, typ) in funs:
+                funScope.define(name, typ)
+            env = (Scope(None, None), funScope, varScope, Scope(None, None))
+            with self.assertRaises(TypeError):
+                tcExpr(expr, env)
+
+class TestStmtTC(TestCase):
+    goodStmts: List[Tuple[str, Any, Any, Any]]= [
+        ( "return;", [], [], []),
+        ( "goto foo;", [], [], []),
+        ( "havoc a;", [('a', BInt())], [], []),
+        ( "assume true;", [], [], []),
+        ( "assume 3<4;", [], [], []),
+        ( "assume a==1;", [('a', BInt())], [], []),
+        ( "assert true;", [], [], []),
+        ( "assert 3<4;", [], [], []),
+        ( "assert a==1;", [('a', BInt())], [], []),
+        ( "foo: return;", [('a', BInt())], [], []),
+        ( "foo: assert a==1;", [('a', BInt())], [], []),
+    ]
+
+    badStmts: List[Tuple[str, Any, Any, Any]]= [
+        ( "havoc a;", [], [], []),
+        ( "assume 1;", [], [], []),
+        ( "assume a==1;", [], [], []),
+        ( "assert 1;", [], [], []),
+        ( "assert a==1;", [], [], []),
+        ( "foo: assert a==1;", [], [], []),
+        ( "foo: havoc a;", [], [], []),
+    ]
+
+    def testGoodStmts(self):
+        """ Make sure stmt tc works on some good samples
+        """
+        for (stmtText, vars, funs, procs) in self.goodStmts:
+            stmt = parseStmt(stmtText)
+            varScope = Scope(None, None)
+            funScope = Scope(None, None)
+            procScope = Scope(None, None)
+
+            for (name, typ) in vars:
+                varScope.define(name, typ)
+            for (name, typ) in funs:
+                funScope.define(name, typ)
+            for (name, typ) in procs:
+                procScope.define(name, typ)
+            env = (Scope(None, None), funScope, varScope, procScope)
+            tcStmt(stmt, env)
+
+    def testBadStmts(self):
+        """ Make sure stmt tc raises exceptions on type errors
+        """
+        for (stmtText, vars, funs, procs) in self.badStmts:
+            stmt = parseStmt(stmtText)
+            varScope = Scope(None, None)
+            funScope = Scope(None, None)
+            procScope = Scope(None, None)
+
+            for (name, typ) in vars:
+                varScope.define(name, typ)
+            for (name, typ) in funs:
+                funScope.define(name, typ)
+            for (name, typ) in procs:
+                procScope.define(name, typ)
+            env = (Scope(None, None), funScope, varScope, procScope)
+            with self.assertRaises(TypeError):
+                tcStmt(stmt, env)
