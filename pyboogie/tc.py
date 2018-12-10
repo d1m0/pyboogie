@@ -163,7 +163,7 @@ def tcExpr(node: AstExpr, env: TCEnv) -> BType:
         # TODO: Revisit after call-forall
         return BBool()
     elif isinstance(node, AstMapIndex):
-        tMap = tcExpr(node.map, env)
+        tMap: BType = tcExpr(node.map, env)
         tIndex: List[BType] = [tcExpr(node.index, env)]
         if (not isinstance(tMap, BMap)):
             raise TypeError(node, "Expected map here {} instead got {}".format(node, tMap))

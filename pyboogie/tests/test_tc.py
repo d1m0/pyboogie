@@ -34,10 +34,40 @@ class TestExprTC(TestCase):
         ( "foo(10)", BBool(), ([], [('foo', BLambda((BInt(),), BBool()))])),
         ( "foo(10, b)", BBool(), ([('b', BBool())], [('foo', BLambda((BInt(),BBool()), BBool()))])),
         ( "foo(10, foo)", BBool(), ([('foo', BBool())], [('foo', BLambda((BInt(),BBool()), BBool()))])),
+        ( "if true then 2 else 3", BInt(), ([], [])),
+        ( "(forall a: int :: a+1)", BInt(), ([('a', BInt())], [])),
     ]
 
-    badExprs: List[Tuple[str, BType, Any]]= [
-        ( "a[10:=1]", BMap([BInt()], BBool()), ([('a', BMap([BInt()], BBool()))], [])),
+    badExprs: List[Tuple[str, Any, Any]]= [
+        ( "1+True", [], []),
+        ( "1<True", [], []),
+        ( "False<True", [], []),
+        ( "1&&2", [], []),
+        ( "1==>2", [], []),
+        ( "!1", [], []),
+        ( "-False", [], []),
+        ( "a", [], []),
+        ( "a+1", [('a', BBool())], []),
+        ( "a[10]", [], []),
+        ( "a[10]", [('a', BBool())], []),
+        ( "a[10]", [('a', BMap([BBool()], BInt()))], []),
+        ( "a[10]", [('a', BMap([BInt(), BBool()], BInt()))], []),
+        ( "1+a[10]", [('a', BMap([BInt()], BBool()))], []),
+        ( "a[10:=1]", [], []),
+        ( "a[10:=1]", [('a', BBool())], []),
+        ( "a[10:=1]", [('a', BMap([BBool()], BInt()))], []),
+        ( "a[10:=1]", [('a', BMap([BInt(), BBool()], BInt()))], []),
+        ( "a[10:=1]", [('a', BMap([BInt()], BBool()))], []),
+        ( "if 1 then 2 else 3", [], []),
+        ( "if true then 2 else false", [], []),
+        ( "(forall a: int :: b+1)", [], []),
+        ( "(forall a: int :: b+1)", [('b', BBool())], []),
+        ( "(forall a: bool :: a+1)", [('a', BInt())], []),
+        ( "foo(10)", [], []),
+        ( "foo(10)", [('foo', BInt())], []),
+        ( "foo(10)", [], [('foo', BLambda((), BInt()))]),
+        ( "foo(10)", [], [('foo', BLambda((BBool(),), BInt()))]),
+        ( "1+foo(10)", [], [('foo', BLambda((BInt(),), BBool()))]),
     ]
     def testGoodExprs(self):
         """ Make sure expr tc works on some good samples
@@ -58,7 +88,7 @@ class TestExprTC(TestCase):
     def testBadExprs(self):
         """ Make sure expr tc raises exceptions on type errors
         """
-        for (exprText, expType, (vars, funs)) in self.badExprs:
+        for (exprText, vars, funs) in self.badExprs:
             expr = parseExprAst(exprText)
             varScope = Scope(None, None)
             funScope = Scope(None, None)
