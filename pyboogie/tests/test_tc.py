@@ -11,7 +11,7 @@ from ..ast import parseAst, parseExprAst, parseStmt, parseDecl, AstProgram, AstI
     AstTypeConstructorDecl, astBuilder, AstAttribute, AstAssert, AstAssume,\
     AstIf, AstWildcard, AstTernary
 from pyparsing import ParseException, StringEnd
-from ..tc import tcExpr, tcStmt, tcDecl, TypeError, BType, BInt, BBool, Scope, BMap, BLambda, BProcedure
+from ..tc import tcExpr, tcStmt, tcDecl, BTypeError, BType, BInt, BBool, Scope, BMap, BLambda, BProcedure
 from typing import List, Tuple, Any
 
 class TestExprTC(TestCase):
@@ -97,7 +97,7 @@ class TestExprTC(TestCase):
             for (name, typ) in funs:
                 funScope.define(name, typ)
             env = (Scope(None, None), funScope, varScope, Scope(None, None))
-            with self.assertRaises(TypeError):
+            with self.assertRaises(BTypeError):
                 tcExpr(expr, env)
 
 class TestStmtTC(TestCase):
@@ -159,7 +159,7 @@ class TestStmtTC(TestCase):
             for (name, typ) in procs:
                 procScope.define(name, typ)
             env = (Scope(None, None), funScope, varScope, procScope)
-            with self.assertRaises(TypeError):
+            with self.assertRaises(BTypeError):
                 tcStmt(stmt, env)
 
 class TestDeclTC(TestCase):
@@ -190,7 +190,7 @@ class TestDeclTC(TestCase):
             ( "implementation foo(a:int) returns (b:int) { b:= a+1; return; }", [('foo', BInt())], [], []),
             ( "implementation foo(a:int) returns (b:int) { b:= a+1; return; }", [], [], []),
             ( "implementation foo(a:int) returns (b:int) { b:= a+1; return; }", [('foo', BInt())], [], []),
-            ( "implementation foo(a:int) returns (b:int) { b:= a+1; return; }", [], [('foo', BLambda((),()))], []),
+            ( "implementation foo(a:int) returns (b:int) { b:= a+1; return; }", [], [('foo', BLambda((BInt(),),BInt()))], []),
             ( "implementation foo(a:int) returns (b:int) { b:= a+1; return; }", [], [], [('foo', BProcedure((BBool(),), (BInt(),)))]),
             ( "axiom a>0;", [], [], []),
             ( "axiom a>0;", [('a', BBool())], [], []),
@@ -231,5 +231,5 @@ class TestDeclTC(TestCase):
             for (name, typ) in procs:
                 procScope.define(name, typ)
             env = (Scope(None, None), funScope, varScope, procScope)
-            with self.assertRaises(TypeError):
+            with self.assertRaises(BTypeError):
                 tcDecl(decl, env)

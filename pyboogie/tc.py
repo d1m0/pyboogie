@@ -75,13 +75,13 @@ class BProcedure(BType):
         return "[{}]{}".format(str(self._args), str(self._returns))
 # TODO: User defined types
 
-class TypeError(Exception):
+class BTypeError(Exception):
     def __init__(self, loc, msg: str):
         self._loc = loc;
         self._msg = msg;
 
     def __str__(self):
-        return "TypeError in " + str(self._loc) + ": " + self._msg;
+        return "BTypeError in " + str(self._loc) + ": " + self._msg;
 
 
 Declaration=Union[AstDecl, AstBinding]
@@ -96,7 +96,7 @@ class Scope(Generic[ScopeT, DeclT]):
 
     def define(self, Id: str, typ: DeclT):
         if (Id in self._bindings):
-            raise TypeError(self._root, "{} defined more than once".format(Id))
+            raise BTypeError(self._root, "{} defined more than once".format(Id))
 
         self._bindings[Id] = typ;
 
@@ -154,7 +154,7 @@ def tcType(node: AstType, env: TCEnv) -> BType:
 
 def tcExpr(node: AstExpr, env: TCEnv) -> BType:
     """ Type check an expression in a given environment and return the type of
-        the expression. Raise a TypeError on failure """
+        the expression. Raise a BTypeError on failure """
     (types, funcs, vars, procs) = env
     if isinstance(node, AstFalse) or isinstance(node, AstTrue):
         return BBool()
@@ -163,7 +163,7 @@ def tcExpr(node: AstExpr, env: TCEnv) -> BType:
     elif isinstance(node, AstId):
         idT = vars.lookup(node.name)
         if idT is None:
-            raise TypeError(node, "Unknown var {}".format(node.name))
+            raise BTypeError(node, "Unknown var {}".format(node.name))
         return idT
     elif isinstance(node, AstWildcard):
         # TODO: Revisit after call-forall
@@ -172,10 +172,10 @@ def tcExpr(node: AstExpr, env: TCEnv) -> BType:
         tMap: BType = tcExpr(node.map, env)
         tIndex: List[BType] = [tcExpr(node.index, env)]
         if (not isinstance(tMap, BMap)):
-            raise TypeError(node, "Expected map here {} instead got {}".format(node, tMap))
+            raise BTypeError(node, "Expected map here {} instead got {}".format(node, tMap))
 
         if tIndex != tMap._domain:
-            raise TypeError(node, "Bad type for index in {} expected {} but got {}".format(node, tMap._domain, tIndex))
+            raise BTypeError(node, "Bad type for index in {} expected {} but got {}".format(node, tMap._domain, tIndex))
 
         return tMap._range
     elif isinstance(node, AstMapUpdate):
@@ -184,24 +184,24 @@ def tcExpr(node: AstExpr, env: TCEnv) -> BType:
         tVal = tcExpr(node.newVal, env)
 
         if (not isinstance(tMap, BMap)):
-            raise TypeError(node, "Expected map here {} instead got {}".format(node, tMap))
+            raise BTypeError(node, "Expected map here {} instead got {}".format(node, tMap))
 
         if tIndex != tMap._domain:
-            raise TypeError(node, "Bad type for index in {} expected {} but got {}".format(node, tMap._domain, tIndex))
+            raise BTypeError(node, "Bad type for index in {} expected {} but got {}".format(node, tMap._domain, tIndex))
 
         if tVal != tMap._range:
-            raise TypeError(node, "Bad type for value in map update {} expected {} but got {}".format(node, tMap._range, tVal))
+            raise BTypeError(node, "Bad type for value in map update {} expected {} but got {}".format(node, tMap._range, tVal))
 
         return tMap
     elif isinstance(node, AstUnExpr):
         argT = tcExpr(node.expr, env)
         if (node.op == '!'):
             if  (argT != BBool()):
-                raise TypeError(node, "Expected boolean instead got {}".format(node.expr))
+                raise BTypeError(node, "Expected boolean instead got {}".format(node.expr))
             return BBool()
         elif (node.op == '-'):
             if (argT != BInt()):
-                raise TypeError(node, "Expected int instead got {}".format(node.expr))
+                raise BTypeError(node, "Expected int instead got {}".format(node.expr))
             return BInt()
         else:
             assert False, "Bad unary op {}".format(node.op)
@@ -211,15 +211,15 @@ def tcExpr(node: AstExpr, env: TCEnv) -> BType:
 
         if (node.op in ['+', '-', '*', '/', 'div', 'mod']):
             if lhsT != BInt() or rhsT != BInt():
-                raise TypeError(node, "Bad args to {} in {}. Expect ints".format(node.op, node))
+                raise BTypeError(node, "Bad args to {} in {}. Expect ints".format(node.op, node))
             return BInt()
         elif (node.op in ['!=', '<=', '>=', '<:', '==', '<', '>']):
             if lhsT != BInt() or rhsT != BInt():
-                raise TypeError(node, "Bad args to {} in {}. Expect ints".format(node.op, node))
+                raise BTypeError(node, "Bad args to {} in {}. Expect ints".format(node.op, node))
             return BBool()
         elif (node.op in ['<===>', '==>', '||', '&&']):
             if lhsT != BBool() or rhsT != BBool():
-                raise TypeError(node, "Bad args to {} in {}. Expect bools".format(node.op, node))
+                raise BTypeError(node, "Bad args to {} in {}. Expect bools".format(node.op, node))
             return BBool()
         else:
             assert False, "Bad op {}".format(node.op)
@@ -229,9 +229,9 @@ def tcExpr(node: AstExpr, env: TCEnv) -> BType:
         elseT = tcExpr(node.elseE, env)
 
         if (condT != BBool()):
-            raise TypeError(node, "Ternary requires bool not {} in {}".format(condT, node))
+            raise BTypeError(node, "Ternary requires bool not {} in {}".format(condT, node))
         if (thenT != elseT):
-            raise TypeError(node, "Ternary types disagree: {} and {}".format(thenT, elseT))
+            raise BTypeError(node, "Ternary types disagree: {} and {}".format(thenT, elseT))
 
         return thenT
     elif isinstance(node, AstForallExpr):
@@ -245,10 +245,10 @@ def tcExpr(node: AstExpr, env: TCEnv) -> BType:
         argTypes = tuple([tcExpr(arg, env) for arg in node.ops])
         funType: Optional[BType] = funcs.lookup(node.funcName)
         if (funType is None or not isinstance(funType, BLambda)):
-            raise TypeError(node, "{} does not name a function".format(node.funcName))
+            raise BTypeError(node, "{} does not name a function".format(node.funcName))
 
         if argTypes != funType._args:
-            raise TypeError(node, "Argument mismatch in call {}".format(node))
+            raise BTypeError(node, "Argument mismatch in call {}".format(node))
 
         return funType._return
     else:
@@ -256,7 +256,7 @@ def tcExpr(node: AstExpr, env: TCEnv) -> BType:
         
 
 def tcStmt(node: AstStmt, env: TCEnv) -> None:
-    """ Type check a statement in a given environment. Raise a TypeError on
+    """ Type check a statement in a given environment. Raise a BTypeError on
         failure. """
     (types, funcs, vars, procs) = env
     if (isinstance(node, AstLabel)):
@@ -265,13 +265,13 @@ def tcStmt(node: AstStmt, env: TCEnv) -> None:
     elif (isinstance(node, AstOneExprStmt)):
         exprType = tcExpr(node.expr, env)
         if (exprType != BBool()):
-            raise TypeError(node, "Expected boolean expression in {}".format(node))
+            raise BTypeError(node, "Expected boolean expression in {}".format(node))
     elif (isinstance(node, AstAssignment)):
         lhsTypes = [tcExpr(lhsId, env) for lhsId in node.lhs]
         rhsTypes = [tcExpr(rhsId, env) for rhsId in node.rhs]
 
         if (lhsTypes != rhsTypes):
-            raise TypeError(node, "Type mismatch in assignment {}".format(node))
+            raise BTypeError(node, "Type mismatch in assignment {}".format(node))
     elif (isinstance(node, AstHavoc)):
         for id in node.ids:
             tcExpr(id, env)
@@ -283,10 +283,10 @@ def tcStmt(node: AstStmt, env: TCEnv) -> None:
         procType: Optional[BType] = procs.lookup(node.id)
 
         if (procType is None):
-            raise TypeError(node, "Unknown procedure {} in call {}".format(node.id, node))
+            raise BTypeError(node, "Unknown procedure {} in call {}".format(node.id, node))
 
         if (not isinstance(procType, BProcedure)):
-            raise TypeError(node, "{} not a procedure in call {}".format(node.id, node))
+            raise BTypeError(node, "{} not a procedure in call {}".format(node.id, node))
 
         if (node.lhs is None):
             expectedReturns: Tuple[BType,...] = ()
@@ -296,10 +296,10 @@ def tcStmt(node: AstStmt, env: TCEnv) -> None:
         arguments = tuple([tcExpr(arg, env) for arg in node.arguments])
 
         if (procType._args != arguments):
-            raise TypeError(node, "Mismatch in arguments in call {}".format(node.id, node))
+            raise BTypeError(node, "Mismatch in arguments in call {}".format(node.id, node))
 
         if (procType._returns != expectedReturns):
-            raise TypeError(node, "Mismatch in arguments in call {}".format(node.id, node))
+            raise BTypeError(node, "Mismatch in arguments in call {}".format(node.id, node))
     else:
         assert False, "Unknown stmt: {}".format(node)
 
@@ -332,7 +332,7 @@ def tcDecl(d: AstDecl, env: TCEnv) -> None:
 
             # Check type of body agrees with return type
             if retT != newFunT._return:
-                raise TypeError(d, "Return type mismatch in {}".format(d))
+                raise BTypeError(d, "Return type mismatch in {}".format(d))
     elif (isinstance(d, AstProcedure) or isinstance(d, AstImplementation)):
         procOrImpl: Union[AstProcedure, AstImplementation] = d
         params = procOrImpl.parameters
@@ -350,12 +350,12 @@ def tcDecl(d: AstDecl, env: TCEnv) -> None:
         if (isinstance(d, AstImplementation)):
             procT = procs.lookup(d.name)
             if procT is None:
-                raise TypeError(d, "Implementaion {} missing procedure definition".format(d.name))
+                raise BTypeError(d, "Implementaion {} missing procedure definition".format(d.name))
             if (procT != implT):
-                raise TypeError(d, "Implementaion {} disagrees with procedure".format(d.name))
+                raise BTypeError(d, "Implementaion {} disagrees with procedure".format(d.name))
         else:
             if procs.lookup(d.name) is not None:
-                raise TypeError(d, "Multiple procedures with same name {}".format(d.name))
+                raise BTypeError(d, "Multiple procedures with same name {}".format(d.name))
 
 
         bodyVars = Scope(procOrImpl, vars)
@@ -371,12 +371,12 @@ def tcDecl(d: AstDecl, env: TCEnv) -> None:
             for (_, expr) in d.requires + d.ensures:
                 predT = tcExpr(expr, reqEnsEnv)
                 if (predT != BBool()):
-                    raise TypeError(d, "Require/ensure not a boolean")
+                    raise BTypeError(d, "Require/ensure not a boolean")
 
             # Only check modifies in the global variable environment
             for (_, var) in d.modifies:
-                if (vars.lookup(var.name) is None):
-                    raise TypeError(d, "Unknown var in modifies: {}".format(var))
+                if (vars.lookup(var) is None):
+                    raise BTypeError(d, "Unknown var in modifies: {}".format(var))
 
             procs.define(d.name, implT)
 
@@ -390,7 +390,7 @@ def tcDecl(d: AstDecl, env: TCEnv) -> None:
     elif isinstance(d, AstAxiomDecl):
         tcExpr(d.expr, env)
     else:
-        raise TypeError(d, "Don't know how to handle decl of type {}: {}".format(type(d), d))
+        raise BTypeError(d, "Don't know how to handle decl of type {}: {}".format(type(d), d))
 
 def tcProg(p: AstProgram) -> TCEnv:
     typeScope: TypeScope = Scope(p, None)

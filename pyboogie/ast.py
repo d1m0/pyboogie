@@ -592,7 +592,7 @@ class AstBuilder(BoogieParser[AstNode]):
         if typ == "requires":
           requires.append((isFree, arg))
         elif typ == "modifies":
-          modifies.extend([(isFree, id) for id in arg])
+          modifies.extend([(isFree, id.name) for id in arg])
         elif typ == "ensures":
           ensures.append((isFree, arg))
         else:
