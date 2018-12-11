@@ -399,7 +399,40 @@ def tcProg(p: AstProgram) -> TCEnv:
     procScope: ProcedureScope = Scope(p, None)
 
     env = (typeScope, funScope, varScope, procScope)
+    # To handle non-linear ordering of decls re-sort them
+    # based on decl classes that don't have intradependencies
+    constDecls: List[AstConstDecl] = []
+    varDecls: List[AstVarDecl] = []
+    funcDecls: List[AstFunctionDecl] = []
+    axiomDecls: List[AstAxiomDecl] = []
+    procedureDecls: List[AstProcedure] = []
+    implDecls: List[AstImplementation] = []
+
     for d in p.decls:
+        if (isinstance(d, AstConstDecl)):
+            constDecls.append(d)
+        elif (isinstance(d, AstVarDecl)):
+            varDecls.append(d)
+        elif (isinstance(d, AstFunctionDecl)):
+            funcDecls.append(d)
+        elif (isinstance(d, AstAxiomDecl)):
+            axiomDecls.append(d)
+        elif (isinstance(d, AstProcedure)):
+            procedureDecls.append(d)
+        elif (isinstance(d, AstImplementation)):
+            implDecls.append(d)
+
+    for d in constDecls:
+        tcDecl(d, env)
+    for d in varDecls:
+        tcDecl(d, env)
+    for d in funcDecls:
+        tcDecl(d, env)
+    for d in axiomDecls:
+        tcDecl(d, env)
+    for d in procedureDecls:
+        tcDecl(d, env)
+    for d in implDecls:
         tcDecl(d, env)
 
     return env
