@@ -73,7 +73,20 @@ class BProcedure(BType):
         return hash((self._args, self._returns))
     def __str__(self):
         return "[{}]{}".format(str(self._args), str(self._returns))
-# TODO: User defined types
+class BUserType(BType):
+    """ Type of a procedure. Only used internally - not an actual type in
+        Boogie's type system. """
+    def __init__(self, name: str, args: Tuple[BType, ...]):
+        self._name = name
+        self._args = args 
+    def __eq__(self, other):
+        return isinstance(other, BUserType) and \
+                self._name == other._name and \
+                self._args == other._args
+    def __hash__(self):
+        return hash((self._name, self._args))
+    def __str__(self):
+        return "{} {}".format(self._name, " ".join(map(str, self._args)))
 
 class BTypeError(Exception):
     def __init__(self, loc, msg: str):
@@ -136,6 +149,7 @@ def tcType(node: AstType, env: TCEnv) -> BType:
         identifiers in type constructors are in-scope and number of type
         arguments for type constructors respect user definitions. Raise an 
         error on failure. Return the checked BType on success."""
+    (types, funcs, vars, procs) = env
     if (isinstance(node, AstIntType)):
         return BInt()
     elif (isinstance(node, AstBoolType)):
@@ -148,7 +162,16 @@ def tcType(node: AstType, env: TCEnv) -> BType:
         rangeT = tcType(node.rangeT, env)
         return BMap(domainT, rangeT)
     elif (isinstance(node, AstCompoundType)):
-        assert False, "NYI Compound types"
+        typConstr = types.lookup(node.name)
+        if (typConstr is None):
+            raise BTypeError(node, "Unknown user defined type {}".format(node.name))
+
+        typeArgs = [tcType(tArg, env) for tArg in node.typeArgs]
+        formalArity = len(typConstr.formals)
+        actualArity = len(typeArgs)
+        if (actualArity != formalArity):
+            raise BTypeError(node, "Expected {} arguments for {} but got {}".format(formalArity, node.name, actualArity))
+        return BUserType(node.name, tuple(typeArgs))
     else:
         assert False, "Unknown type: {}".format(node)
 
@@ -214,8 +237,8 @@ def tcExpr(node: AstExpr, env: TCEnv) -> BType:
                 raise BTypeError(node, "Bad args to {} in {}. Expect ints".format(node.op, node))
             return BInt()
         elif (node.op in ['!=', '<=', '>=', '<:', '==', '<', '>']):
-            if lhsT != BInt() or rhsT != BInt():
-                raise BTypeError(node, "Bad args to {} in {}. Expect ints".format(node.op, node))
+            if lhsT != rhsT:
+                raise BTypeError(node, "Bad args to {} in {}. Expect same types".format(node.op, node))
             return BBool()
         elif (node.op in ['<===>', '==>', '||', '&&']):
             if lhsT != BBool() or rhsT != BBool():
@@ -310,7 +333,10 @@ def tcDecl(d: AstDecl, env: TCEnv) -> None:
     """
     (types, funcs, vars, procs) = env
     if (isinstance(d, AstTypeConstructorDecl)):
-        assert False, "NYI Type constructor decls"
+        if types.lookup(d.name) is not None:
+            raise  BTypeError(d, "Type {} defined twice".format(d.name))
+
+        types.define(d.name, d)
     elif (isinstance(d, AstVarDecl) or isinstance(d, AstConstDecl)):
         # Nothing to check - just add new global vars to environment
         for name in d.binding.names:
@@ -401,6 +427,7 @@ def tcProg(p: AstProgram) -> TCEnv:
     env = (typeScope, funScope, varScope, procScope)
     # To handle non-linear ordering of decls re-sort them
     # based on decl classes that don't have intradependencies
+    typeDecls: List[AstTypeConstructorDecl] = []
     constDecls: List[AstConstDecl] = []
     varDecls: List[AstVarDecl] = []
     funcDecls: List[AstFunctionDecl] = []
@@ -421,7 +448,13 @@ def tcProg(p: AstProgram) -> TCEnv:
             procedureDecls.append(d)
         elif (isinstance(d, AstImplementation)):
             implDecls.append(d)
+        elif (isinstance(d, AstTypeConstructorDecl)):
+            typeDecls.append(d)
+        else:
+            assert False, "Unknown decl {}".format(d)
 
+    for d in typeDecls:
+        tcDecl(d, env)
     for d in constDecls:
         tcDecl(d, env)
     for d in varDecls:

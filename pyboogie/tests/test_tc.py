@@ -20,6 +20,7 @@ class TestExprTC(TestCase):
         ( "true", BBool(), ([], [])),
         ( "1+1", BInt(), ([], [])),
         ( "1<1", BBool(), ([], [])),
+        ( "True<False", BBool(), ([], [])),
         ( "1<1 || false", BBool(), ([], [])),
         ( "1<1 ==> (4+5 == 9 mod 1)", BBool(), ([], [])),
         ( "-1", BInt(), ([], [])),
