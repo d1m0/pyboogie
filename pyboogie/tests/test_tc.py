@@ -11,7 +11,7 @@ from ..ast import parseAst, parseExprAst, parseStmt, parseDecl, AstProgram, AstI
     AstTypeConstructorDecl, astBuilder, AstAttribute, AstAssert, AstAssume,\
     AstIf, AstWildcard, AstTernary
 from pyparsing import ParseException, StringEnd
-from ..tc import tcExpr, tcStmt, tcDecl, BTypeError, BType, BInt, BBool, Scope, BMap, BLambda, BProcedure, typeAccumulate
+from ..tc import tcExpr, tcStmt, tcDecl, tcProg, BTypeError, BType, BInt, BBool, Scope, BMap, BLambda, BProcedure, typeAccumulate
 from typing import List, Tuple, Any
 
 class TestExprTC(TestCase):
@@ -236,3 +236,54 @@ class TestDeclTC(TestCase):
             with self.assertRaises(BTypeError):
                 typeAccumulate(decl, env)
                 tcDecl(decl, env)
+
+
+class TestProgTC(TestCase):
+    goodProgs: List[Tuple[str, Any]]= [
+            ( "var a: int;", []),
+            ( """var a: int;
+                 procedure foo(b: int) returns (c:int) {
+                    c:=a+b;
+                    return;
+                 }
+              """, []),
+            ("""type Foo X Y;
+               var a: Foo int bool;
+             """, []),
+            ( """type Foo X Y;
+                 var a: Foo int int;
+                 procedure foo(b: Foo int int) returns (c:bool) {
+                    c:=a<b;
+                    return;
+                 }
+              """, []),
+    ]
+
+    badProgs: List[str]= [
+            "function foo() returns (int) {true}",
+            """type Foo X Y;
+               var a: Foo int int;
+               procedure foo(b: Foo int bool) returns (c:bool) {
+                  c:=a<b;
+                  return;
+               }
+            """,
+            """type Foo X Y;
+               var a: Foo Bad Type;
+            """,
+    ]
+
+    def testGoodProgs(self):
+        """ Make sure whole program tc works on some good samples
+        """
+        for (progText, _) in self.goodProgs:
+            p = parseAst(progText)
+            env = tcProg(p)
+
+    def testBadDecls(self):
+        """ Make sure whole program tc raises exceptions on type errors
+        """
+        for progText in self.badProgs:
+            p = parseAst(progText)
+            with self.assertRaises(BTypeError):
+                tcProg(p)
