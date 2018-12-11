@@ -327,9 +327,9 @@ def tcStmt(node: AstStmt, env: TCEnv) -> None:
         assert False, "Unknown stmt: {}".format(node)
 
 
-def tcDecl(d: AstDecl, env: TCEnv) -> None:
-    """ Type check a declaration in a given environment. DESTRUCTIVELY Update
-        the passed-in environment in-place.
+def typeAccumulate(d: AstDecl, env: TCEnv) -> None:
+    """ Accumulate definitions in the current environment from the definition
+        d. Destructively updates the passed-in environment in-place.
     """
     (types, funcs, vars, procs) = env
     if (isinstance(d, AstTypeConstructorDecl)):
@@ -338,14 +338,48 @@ def tcDecl(d: AstDecl, env: TCEnv) -> None:
 
         types.define(d.name, d)
     elif (isinstance(d, AstVarDecl) or isinstance(d, AstConstDecl)):
-        # Nothing to check - just add new global vars to environment
         for name in d.binding.names:
+            if vars.lookup(name) is not None:
+                raise  BTypeError(d, "Var {} defined twice".format(name))
+
             vars.define(name, tcType(d.binding.typ, env))
     elif (isinstance(d, AstFunctionDecl)):
+        if funcs.lookup(d.id) is not None:
+            raise  BTypeError(d, "Function {} defined twice".format(d.id))
+
         newFunT = BLambda(
             tuple(tcType(b.typ, env) for b in d.parameters for name in b.names),
             tcType(d.returns, env))
         funcs.define(d.id, newFunT)
+    elif (isinstance(d, AstProcedure)):
+        if (procs.lookup(d.name) is not None):
+            raise BTypeError(d, "Procedure {} defined more than once".format(d.name))
+
+        procT = BProcedure(
+            tuple(tcType(typ, env) for (_, typ) in flatBindings(d.parameters)),
+            tuple(tcType(typ, env) for (_, typ) in flatBindings(d.returns)))
+        procs.define(d.name, procT)
+    elif (isinstance(d, AstImplementation)):
+        pass # Implementation don't add names to the proc space
+    elif (isinstance(d, AstAxiomDecl)):
+        pass # Axioms are anonymous
+    else:
+        raise BTypeError(d, "Don't know how to handle decl of type {}: {}".format(type(d), d))
+
+
+def tcDecl(d: AstDecl, env: TCEnv) -> None:
+    """ Type check a declaration in a given environment. Does not update the
+        passed-in environment.
+    """
+    (types, funcs, vars, procs) = env
+    if (isinstance(d, AstTypeConstructorDecl)):
+        pass
+    elif (isinstance(d, AstVarDecl) or isinstance(d, AstConstDecl)):
+        pass
+    elif (isinstance(d, AstFunctionDecl)):
+        newFunT = BLambda(
+            tuple(tcType(b.typ, env) for b in d.parameters for name in b.names),
+            tcType(d.returns, env))
 
         if (d.body is not None):
             # Check function body in new scope with parameters declared
@@ -379,10 +413,6 @@ def tcDecl(d: AstDecl, env: TCEnv) -> None:
                 raise BTypeError(d, "Implementaion {} missing procedure definition".format(d.name))
             if (procT != implT):
                 raise BTypeError(d, "Implementaion {} disagrees with procedure".format(d.name))
-        else:
-            if procs.lookup(d.name) is not None:
-                raise BTypeError(d, "Multiple procedures with same name {}".format(d.name))
-
 
         bodyVars = Scope(procOrImpl, vars)
         for (name, typ) in flatBindings(params):
@@ -404,8 +434,6 @@ def tcDecl(d: AstDecl, env: TCEnv) -> None:
                 if (vars.lookup(var) is None):
                     raise BTypeError(d, "Unknown var in modifies: {}".format(var))
 
-            procs.define(d.name, implT)
-
         if (procOrImpl.body is not None):
             for (name, typ) in flatBindings(localVars):
                 bodyVars.define(name, tcType(typ, env))
@@ -425,47 +453,21 @@ def tcProg(p: AstProgram) -> TCEnv:
     procScope: ProcedureScope = Scope(p, None)
 
     env = (typeScope, funScope, varScope, procScope)
-    # To handle non-linear ordering of decls re-sort them
-    # based on decl classes that don't have intradependencies
-    typeDecls: List[AstTypeConstructorDecl] = []
-    constDecls: List[AstConstDecl] = []
-    varDecls: List[AstVarDecl] = []
-    funcDecls: List[AstFunctionDecl] = []
-    axiomDecls: List[AstAxiomDecl] = []
-    procedureDecls: List[AstProcedure] = []
-    implDecls: List[AstImplementation] = []
 
+    # First accumulate just the type definitions
     for d in p.decls:
-        if (isinstance(d, AstConstDecl)):
-            constDecls.append(d)
-        elif (isinstance(d, AstVarDecl)):
-            varDecls.append(d)
-        elif (isinstance(d, AstFunctionDecl)):
-            funcDecls.append(d)
-        elif (isinstance(d, AstAxiomDecl)):
-            axiomDecls.append(d)
-        elif (isinstance(d, AstProcedure)):
-            procedureDecls.append(d)
-        elif (isinstance(d, AstImplementation)):
-            implDecls.append(d)
-        elif (isinstance(d, AstTypeConstructorDecl)):
-            typeDecls.append(d)
-        else:
-            assert False, "Unknown decl {}".format(d)
+        if (not isinstance(d, AstTypeConstructorDecl)):
+            continue
+        typeAccumulate(d, env)
 
-    for d in typeDecls:
-        tcDecl(d, env)
-    for d in constDecls:
-        tcDecl(d, env)
-    for d in varDecls:
-        tcDecl(d, env)
-    for d in funcDecls:
-        tcDecl(d, env)
-    for d in axiomDecls:
-        tcDecl(d, env)
-    for d in procedureDecls:
-        tcDecl(d, env)
-    for d in implDecls:
+    # Next accumulate remaining definitions
+    for d in p.decls:
+        if (isinstance(d, AstTypeConstructorDecl)):
+            continue
+        typeAccumulate(d, env)
+
+    # Finally check all definitions in the body w.r.t. accumulated env.
+    for d in p.decls:
         tcDecl(d, env)
 
     return env

@@ -11,7 +11,7 @@ from ..ast import parseAst, parseExprAst, parseStmt, parseDecl, AstProgram, AstI
     AstTypeConstructorDecl, astBuilder, AstAttribute, AstAssert, AstAssume,\
     AstIf, AstWildcard, AstTernary
 from pyparsing import ParseException, StringEnd
-from ..tc import tcExpr, tcStmt, tcDecl, BTypeError, BType, BInt, BBool, Scope, BMap, BLambda, BProcedure
+from ..tc import tcExpr, tcStmt, tcDecl, BTypeError, BType, BInt, BBool, Scope, BMap, BLambda, BProcedure, typeAccumulate
 from typing import List, Tuple, Any
 
 class TestExprTC(TestCase):
@@ -20,7 +20,7 @@ class TestExprTC(TestCase):
         ( "true", BBool(), ([], [])),
         ( "1+1", BInt(), ([], [])),
         ( "1<1", BBool(), ([], [])),
-        ( "True<False", BBool(), ([], [])),
+        ( "true<false", BBool(), ([], [])),
         ( "1<1 || false", BBool(), ([], [])),
         ( "1<1 ==> (4+5 == 9 mod 1)", BBool(), ([], [])),
         ( "-1", BInt(), ([], [])),
@@ -40,13 +40,12 @@ class TestExprTC(TestCase):
     ]
 
     badExprs: List[Tuple[str, Any, Any]]= [
-        ( "1+True", [], []),
-        ( "1<True", [], []),
-        ( "False<True", [], []),
+        ( "1+true", [], []),
+        ( "1<true", [], []),
         ( "1&&2", [], []),
         ( "1==>2", [], []),
         ( "!1", [], []),
-        ( "-False", [], []),
+        ( "-false", [], []),
         ( "a", [], []),
         ( "a+1", [('a', BBool())], []),
         ( "a[10]", [], []),
@@ -187,6 +186,7 @@ class TestDeclTC(TestCase):
             ( "procedure foo(a:int) returns (b:int) requires (a>0); ensures (b>0); modifies a; { b:= a+1; return; }", [], [], []),
             ( "procedure foo(a:int) returns (b:int) requires a+1; { b:= a+1; return; }", [], [], []),
             ( "procedure foo(a:int) returns (b:int) ensures a+1; { b:= a+1; return; }", [], [], []),
+            ( "procedure foo(a:int) returns (b:int) ensures c==1; { b:= a+1; c:=1; return; }", [], [], []),
             ( "implementation foo(a:int) returns (b:int) { b:= a+1; return; }", [], [], []),
             ( "implementation foo(a:int) returns (b:int) { b:= a+1; return; }", [('foo', BInt())], [], []),
             ( "implementation foo(a:int) returns (b:int) { b:= a+1; return; }", [], [], []),
@@ -214,6 +214,7 @@ class TestDeclTC(TestCase):
             for (name, typ) in procs:
                 procScope.define(name, typ)
             env = (Scope(None, None), funScope, varScope, procScope)
+            typeAccumulate(decl, env)
             tcDecl(decl, env)
 
     def testBadDecls(self):
@@ -233,4 +234,5 @@ class TestDeclTC(TestCase):
                 procScope.define(name, typ)
             env = (Scope(None, None), funScope, varScope, procScope)
             with self.assertRaises(BTypeError):
+                typeAccumulate(decl, env)
                 tcDecl(decl, env)
