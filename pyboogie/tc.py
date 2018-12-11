@@ -52,7 +52,7 @@ class BLambda(BType):
         self._args = args
         self._return = ret
     def __eq__(self, other):
-        return isinstance(other, BMap) and \
+        return isinstance(other, BLambda) and \
                 self._args == other._args and \
                 self._return == other._return
     def __hash__(self):
@@ -66,7 +66,7 @@ class BProcedure(BType):
         self._args = args
         self._returns = rets
     def __eq__(self, other):
-        return isinstance(other, BMap) and \
+        return isinstance(other, BProcedure) and \
                 self._args == other._args and \
                 self._returns == other._returns
     def __hash__(self):
@@ -118,12 +118,18 @@ TypeScope=Scope[AstProgram, AstTypeConstructorDecl]
 FunctionScope=Scope[AstProgram, BLambda]
 # Constants and Variables can be defined at the Program or Procedure/Function
 # lvl
-VarScope=Scope[Union[AstProgram, AstBody, AstFunctionDecl, AstForallExpr], BType]
+VarScope=Scope[Union[AstProgram, AstFunctionDecl, AstProcedure, AstImplementation, AstForallExpr], BType]
 # Procedures can be defined at the Program level
 ProcedureScope=Scope[Union[AstProgram], BProcedure]
 # Attributes don't have definition statements so we don't track them
 # Our type-checking environment is a tuple of the 4 different scopes
 TCEnv=Tuple[TypeScope, FunctionScope, VarScope, ProcedureScope]
+
+
+def flatBindings(bindings: Iterable[AstBinding]) -> Iterable[Tuple[str, AstType]]:
+    for b in bindings:
+        for name in b.names:
+            yield (name, b.typ)
 
 def tcType(node: AstType, env: TCEnv) -> BType:
     """ Type check a type specification in a given environment. Check that any
@@ -298,109 +304,102 @@ def tcStmt(node: AstStmt, env: TCEnv) -> None:
         assert False, "Unknown stmt: {}".format(node)
 
 
-def tc(node: AstStmt) -> None:
-    pass
-"""
-def tc(node: AstNode, env: TCEnv) -> None:
+def tcDecl(d: AstDecl, env: TCEnv) -> None:
+    """ Type check a declaration in a given environment. DESTRUCTIVELY Update
+        the passed-in environment in-place.
+    """
     (types, funcs, vars, procs) = env
-    # Program
-    if isinstance(node, AstProgram):
-        for d in node.decls:
-            if (isinstance(d, AstTypeConstructorDecl)):
-                # Check type in current env (as it may refer to prev type defs)
-                tc(d, env)
-                # New Type constructor type-checked, add it to types
-                types.define(d.name, d)
-            elif (isinstance(d, AstFunctionDecl)):
-                # Build new var/func envs to check func body
-                newVars = Scope(AstFunctionDecl, vars)
-                # Note we don't modify funcs here, in case TC-ing the body
-                # fails
-                newFuncs = Scope(funcs._scope, funcs)
-                newFuncs.define(d.name, d)
+    if (isinstance(d, AstTypeConstructorDecl)):
+        assert False, "NYI Type constructor decls"
+    elif (isinstance(d, AstVarDecl) or isinstance(d, AstConstDecl)):
+        # Nothing to check - just add new global vars to environment
+        for name in d.binding.names:
+            vars.define(name, tcType(d.binding.typ, env))
+    elif (isinstance(d, AstFunctionDecl)):
+        newFunT = BLambda(
+            tuple(tcType(b.typ, env) for b in d.parameters for name in b.names),
+            tcType(d.returns, env))
+        funcs.define(d.id, newFunT)
 
-                for binding in d.parameters:
-                    for name in binding.names:
-                        newVars.define(name, binding)
-                for name in d.returns:
-                    newVars.define(name, d.returns)
+        if (d.body is not None):
+            # Check function body in new scope with parameters declared
+            bodyVars: VarScope = Scope(d, vars)
+            for (name, typ) in flatBindings(d.parameters):
+                bodyVars.define(name, tcType(typ, env))
 
-                newEnv = (types, newFuncs, newVars, procs)
-                tc(d.body, newEnv)
-                # Function type-checked, add it to funcs
-                funcs.define(d.name, d)
-            elif (isinstance(d, AstVarDecl) or isinstance(d, AstConstDecl)):
-                for name in d.binding:
-                    vars.define(name, d)
-            elif (isinstance(d, AstProcedure) or isinstance(d, AstImplementation)):
-                if (isinstance(d, AstImplementation)):
-                    # Implementation needs to have a corresponding procedure
-                    proc = procs.lookup(d.name)
-                    if proc is None:
-                        raise TypeError(d, "Implementaion {} missing procedure definition".format(d.name))
-                    # Implmentation and Procedure need to agree on signatures
-                    if (callSig(proc) != callSig(d)):
-                        raise TypeError(d, "Implementaion {} disagrees with procedure".format(d.name))
+            bodyEnv = (types, funcs, bodyVars, procs)
+            retT = tcExpr(d.body, bodyEnv)
 
-                newVars = Scope(d, vars)
+            # Check type of body agrees with return type
+            if retT != newFunT._return:
+                raise TypeError(d, "Return type mismatch in {}".format(d))
+    elif (isinstance(d, AstProcedure) or isinstance(d, AstImplementation)):
+        procOrImpl: Union[AstProcedure, AstImplementation] = d
+        params = procOrImpl.parameters
+        rets = procOrImpl.returns
+        if procOrImpl.body is not None:
+            localVars: List[AstBinding] = procOrImpl.body.bindings
+        else:
+            localVars = []
 
-                for binding in d.parameters:
-                    for name in binding.names:
-                        newVars.define(name, binding)
-                for binding in d.returns:
-                    for name in binding.names:
-                        newVars.define(name, binding)
+        implT = BProcedure(
+            tuple(tcType(typ, env) for (_, typ) in flatBindings(params)),
+            tuple(tcType(typ, env) for (_, typ) in flatBindings(rets)))
 
-                if (isinstance(d, AstProcedure)):
-                    newProcs = Scope(d, procs)
-                    newProcs.define(d.name, d)
-                    newEnv = (types, funcs, newVars, newProcs)
-                    # We check requires/ensures in the environment
-                    # including only parameters and returns
-                    for (_, expr) in d.requires + d.ensures:
-                        tc(expr, newEnv)
+        # First check implementation agrees with corresponding procedure
+        if (isinstance(d, AstImplementation)):
+            procT = procs.lookup(d.name)
+            if procT is None:
+                raise TypeError(d, "Implementaion {} missing procedure definition".format(d.name))
+            if (procT != implT):
+                raise TypeError(d, "Implementaion {} disagrees with procedure".format(d.name))
+        else:
+            if procs.lookup(d.name) is not None:
+                raise TypeError(d, "Multiple procedures with same name {}".format(d.name))
 
-                    # Only check modifies in the global variable environment
-                    for (_, var) in d.modifies:
-                        if (vars.lookup(var) is None):
-                            raise TypeError(d, "Unknown var in modifies: {}".format(var))
 
-                for (b in d.body.bindings):
-                    for name in b.names:
-                        newVars.define(name, b)
+        bodyVars = Scope(procOrImpl, vars)
+        for (name, typ) in flatBindings(params):
+            bodyVars.define(name, tcType(typ, env))
+        for (name, typ) in flatBindings(rets):
+            bodyVars.define(name, tcType(typ, env))
 
-                newEnv = (types, funcs, newVars, procs)
-                for stmt in d.body.stmts:
-                    tc(stmt, newEnv)
-                
-                if (isinstance(d, AstProcedure)):
-                    procs.define(d.name, d)
-            elif isinstance(d, AstAxiomDecl):
-                tc(d.expr, env)
-            else:
-                raise TypeError(d, "Don't know how to handle decl of type {}: {}".format(type(d), d))
-                    
-    # Stmts
-    elif (isinstance(node, AstLabel)):
-        # TODO: Check label
-        tc(node.stmt)
-    elif (isinstance(node, AstOneExprStmt)):
-        tc(node.expr)
-    elif (isinstance(node, AstAssignment)):
-        tc(node.rhs)
-        # TODO: Check type of lhs == type(rhs)
-    elif (isinstance(node, AstHavoc)):
-        for var in node.ids:
-            tc(var)
-    elif (isinstance(node, AstReturn)):
-        pass
-    elif (isinstance(node, AstGoto)):
-        # TODO: Check label
-        pass
-    # Exprs
+        if (isinstance(d, AstProcedure)):
+            reqEnsEnv = (types, funcs, bodyVars, procs)
+            # We check requires/ensures in the environment
+            # including only parameters and returns
+            for (_, expr) in d.requires + d.ensures:
+                predT = tcExpr(expr, reqEnsEnv)
+                if (predT != BBool()):
+                    raise TypeError(d, "Require/ensure not a boolean")
+
+            # Only check modifies in the global variable environment
+            for (_, var) in d.modifies:
+                if (vars.lookup(var.name) is None):
+                    raise TypeError(d, "Unknown var in modifies: {}".format(var))
+
+            procs.define(d.name, implT)
+
+        if (procOrImpl.body is not None):
+            for (name, typ) in flatBindings(localVars):
+                bodyVars.define(name, tcType(typ, env))
+
+            bodyEnv = (types, funcs, bodyVars, procs)
+            for stmt in procOrImpl.body.stmts:
+                tcStmt(stmt, bodyEnv)
+    elif isinstance(d, AstAxiomDecl):
+        tcExpr(d.expr, env)
     else:
-        raise TypeError(node, "Don't know how to handle node of type {}: {}".format(type(node), node))
+        raise TypeError(d, "Don't know how to handle decl of type {}: {}".format(type(d), d))
 
-def tcProg(p: AstProgram) -> None:
-    tc(p, Scope(p, None))
-"""
+def tcProg(p: AstProgram) -> TCEnv:
+    typeScope: TypeScope = Scope(p, None)
+    funScope: FunctionScope = Scope(p, None)
+    varScope: VarScope = Scope(p, None)
+    procScope: ProcedureScope = Scope(p, None)
+
+    env = (typeScope, funScope, varScope, procScope)
+    for d in p.decls:
+        tcDecl(d, env)
+
+    return env

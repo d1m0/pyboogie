@@ -266,7 +266,7 @@ class AstFunctionDecl(AstDecl):
     attributes = attrib(type=List[AstAttribute])
     id = attrib(type=str)
     parameters = attrib(type=List[AstBinding])
-    returns = attrib(type=AstBinding)
+    returns = attrib(type=AstType)
     body = attrib(type=Optional[AstExpr])
 
     def __str__(s) -> str:
@@ -482,7 +482,7 @@ class AstBuilder(BoogieParser[AstNode]):
     lhs = toks[1]
     id = toks[2]
     arguments = toks[3]
-    return [AstCall(attributes, lhs, id, arguments)]
+    return [AstCall(attributes, lhs, id.name, arguments)]
 
   def onIfStmt(s, prod: PE, st: str, loc: int, toks: PR) -> Iterable[AstNode]:
     elseNode: Optional[Union[List[AstStmt], AstStmt]] = None
@@ -545,7 +545,7 @@ class AstBuilder(BoogieParser[AstNode]):
 
   def onFunctionDecl(s, prod: PE, st: str, loc: int, toks: PR) -> Iterable[AstNode]:
     attributes = toks[0]
-    id = toks[1]
+    id = toks[1].name
     (type_args, parameters, returns) = toks[2]
     assert len(type_args) == 0
     body = toks[3] if len(toks) == 4 else None
@@ -654,6 +654,13 @@ def parseStmt(s: str) -> AstStmt:
     return ccast(astBuilder.parseStmt(s), AstStmt)
   except:
     print("Failed parsing")
+    raise
+
+def parseDecl(s: str) -> AstDecl:
+  try:
+    return ccast(astBuilder.parseDecl(s), AstDecl)
+  except:
+    print("Failed parsing {}".format(s))
     raise
 
 def parseAst(s: str) -> AstProgram:

@@ -4,14 +4,14 @@ These tests focus on the core subset of boogie supported.
 """
 from unittest import TestCase
 from ..grammar import BoogieParser
-from ..ast import parseAst, parseExprAst, parseStmt, AstProgram, AstImplementation,\
+from ..ast import parseAst, parseExprAst, parseStmt, parseDecl, AstProgram, AstImplementation,\
     AstBody, AstBinding, AstIntType, AstAssignment, AstId, AstBinExpr, \
     AstNumber, replace, AstMapIndex, AstMapUpdate, AstFuncExpr, AstMapType, \
     AstBoolType, AstBVType, AstCompoundType, parseType, \
     AstTypeConstructorDecl, astBuilder, AstAttribute, AstAssert, AstAssume,\
     AstIf, AstWildcard, AstTernary
 from pyparsing import ParseException, StringEnd
-from ..tc import tcExpr, tcStmt, TypeError, BType, BInt, BBool, Scope, BMap, BLambda, BProcedure
+from ..tc import tcExpr, tcStmt, tcDecl, TypeError, BType, BInt, BBool, Scope, BMap, BLambda, BProcedure
 from typing import List, Tuple, Any
 
 class TestExprTC(TestCase):
@@ -161,3 +161,75 @@ class TestStmtTC(TestCase):
             env = (Scope(None, None), funScope, varScope, procScope)
             with self.assertRaises(TypeError):
                 tcStmt(stmt, env)
+
+class TestDeclTC(TestCase):
+    goodDecls: List[Tuple[str, Any, Any, Any]]= [
+            ( "var a: int;", [], [], []),
+            ( "const a: int;", [], [], []),
+            ( "function foo(a: int) returns (bool);", [], [], []),
+            ( "function foo() returns (int) {1}", [], [], []),
+            ( "function foo(a:int) returns (int) {a+1}", [], [], []),
+            ( "procedure foo(a:int) returns (b:int) { b:= a+1; return; }", [], [], []),
+            ( "procedure foo(a:int) returns (b:int) requires (a>0); ensures (b>0); modifies c; { b:= a+1; return; }", [('c', BBool())], [], []),
+            ( "implementation foo(a:int) returns (b:int) { b:= a+1; return; }", [], [], [('foo', BProcedure((BInt(),), (BInt(),)))]),
+            ( "axiom true;", [], [], []),
+            ( "axiom a>0;", [('a', BInt())], [], []),
+            ( "function sum(n:int) returns (int) { if (n==0) then 0 else n + sum(n-1) }", [], [], []),
+            ( "procedure inf(n:int) returns (r: int) { call r:=inf(n-1); return; }", [], [], []),
+    ]
+
+    badDecls: List[Tuple[str, Any, Any, Any]]= [
+            ( "function foo() returns (int) {true}", [], [], []),
+            ( "function foo(a:int) returns (bool) {a+1}", [], [], []),
+            ( "function foo(a:int) returns (int) {b+1}", [('b', BBool())], [], []),
+            ( "procedure foo(a:int) returns (b:int) ;", [], [], [('foo', BProcedure((), ()))]),
+            ( "procedure foo(a:int) returns (b:int) requires (a>0); ensures (b>0); modifies a; { b:= a+1; return; }", [], [], []),
+            ( "procedure foo(a:int) returns (b:int) requires a+1; { b:= a+1; return; }", [], [], []),
+            ( "procedure foo(a:int) returns (b:int) ensures a+1; { b:= a+1; return; }", [], [], []),
+            ( "implementation foo(a:int) returns (b:int) { b:= a+1; return; }", [], [], []),
+            ( "implementation foo(a:int) returns (b:int) { b:= a+1; return; }", [('foo', BInt())], [], []),
+            ( "implementation foo(a:int) returns (b:int) { b:= a+1; return; }", [], [], []),
+            ( "implementation foo(a:int) returns (b:int) { b:= a+1; return; }", [('foo', BInt())], [], []),
+            ( "implementation foo(a:int) returns (b:int) { b:= a+1; return; }", [], [('foo', BLambda((),()))], []),
+            ( "implementation foo(a:int) returns (b:int) { b:= a+1; return; }", [], [], [('foo', BProcedure((BBool(),), (BInt(),)))]),
+            ( "axiom a>0;", [], [], []),
+            ( "axiom a>0;", [('a', BBool())], [], []),
+            ( "procedure inf(n:int) returns (r: int) { call r:=bar(n-1); return; }", [], [], []),
+    ]
+
+    def testGoodDecls(self):
+        """ Make sure stmt tc works on some good samples
+        """
+        for (declText, vars, funs, procs) in self.goodDecls:
+            decl = parseDecl(declText)
+            varScope = Scope(None, None)
+            funScope = Scope(None, None)
+            procScope = Scope(None, None)
+
+            for (name, typ) in vars:
+                varScope.define(name, typ)
+            for (name, typ) in funs:
+                funScope.define(name, typ)
+            for (name, typ) in procs:
+                procScope.define(name, typ)
+            env = (Scope(None, None), funScope, varScope, procScope)
+            tcDecl(decl, env)
+
+    def testBadDecls(self):
+        """ Make sure stmt tc raises exceptions on type errors
+        """
+        for (declText, vars, funs, procs) in self.badDecls:
+            decl = parseDecl(declText)
+            varScope = Scope(None, None)
+            funScope = Scope(None, None)
+            procScope = Scope(None, None)
+
+            for (name, typ) in vars:
+                varScope.define(name, typ)
+            for (name, typ) in funs:
+                funScope.define(name, typ)
+            for (name, typ) in procs:
+                procScope.define(name, typ)
+            env = (Scope(None, None), funScope, varScope, procScope)
+            with self.assertRaises(TypeError):
+                tcDecl(decl, env)

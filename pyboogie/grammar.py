@@ -261,7 +261,7 @@ class BoogieParser(Generic[T]):
     s.FArg.setParseAction(
             lambda st, loc, toks: s.onBinding(s.FArg, st, loc, toks))
     s.FSig = G(O(s.TypeArgs)) + S(s.LPARN) + G(O(csl(s.FArg))) + \
-            S(s.RPARN) + S(s.RETURNS) + S(s.LPARN) + s.FArg + S(s.RPARN)
+            S(s.RPARN) + S(s.RETURNS) + S(s.LPARN) + s.Type + S(s.RPARN)
     s.FunctionDecl = S(s.FUNCTION) + G(s.AttrList) + s.Id + G(s.FSig) + S(s.SEMI) |\
                      S(s.FUNCTION) + G(s.AttrList) + s.Id + G(s.FSig) +\
                         S(s.LBRAC) + s.Expr + S(s.RBRAC)
@@ -285,7 +285,7 @@ class BoogieParser(Generic[T]):
           | G(G(O(s.FREE)) + s.MODIFIES + G(csl(s.Id)) + s.SEMI) \
           | G(G(O(s.FREE)) + s.ENSURES + s.Expr + s.SEMI)
 
-    s.OutParameters = s.RETURNS + s.LPARN + csl(s.IdsTypeWhere) + s.RPARN
+    s.OutParameters = S(s.RETURNS) + S(s.LPARN) + csl(s.IdsTypeWhere) + S(s.RPARN)
     s.PSig = G(O(s.TypeArgs)) + S(s.LPARN) + G(O(csl(s.IdsTypeWhere))) + \
             S(s.RPARN) + G(O(s.OutParameters))
 
@@ -414,6 +414,9 @@ class BoogieParser(Generic[T]):
 
   def parseStmt(s, st:str) -> T:
     return (s.LStmt + StringEnd()).parseString(st)[0]
+
+  def parseDecl(s, st:str) -> T:
+    return (s.Decl + StringEnd()).parseString(st)[0]
 
   def parseProgram(s, st:str) -> T:
     return (s.Program + ZoM(s.Comment) + StringEnd()).parseString(st)[0]
