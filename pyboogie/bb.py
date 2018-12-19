@@ -71,18 +71,6 @@ class BB(List[AstStmt]):
         succLabels = raw[3] # type: List[str]
         return (predLabels, BB(label, [], stmts, []), succLabels)
 
-    def is_gcl(self) -> bool:
-        """ A BB is in GCL form if all the assumes come first in the statement
-        list, and all of the asserts come last. """
-        def stmt_weight(stmt: AstStmt) -> int:
-            if isinstance(stmt, AstAssume):
-                return 0
-            else:
-                return 1
-
-        stmt_weights = [stmt_weight(stmt) for stmt in self]
-        return stmt_weights == sorted(stmt_weights)
-
     def is_isomorphic(self, other: "BB", mapping: "Optional[Dict[BB, BB]]" = None) -> bool:
         """ Check if the CFG rooted at self is isomorphic to the CFG rooted at other.
             This involves checking that:
@@ -377,71 +365,6 @@ class Function(object):
                self.locals == other.locals and
                self.returns == other.returns and
                self.entry().is_isomorphic(other.entry()))
-
-    def is_gcl(self) -> bool:
-        return all(bb.is_gcl() for bb in self._bbs.values())
-
-    def split_asserts(self) -> Tuple["Function", Dict[BB, BB]]:
-        workQ = [(None, self.entry())]  # type: List[Tuple[Optional[BB], BB]]
-        bbMap = {}  # type: Dict[BB, BB]
-
-        while len(workQ) > 0:
-            (from_bb, cur_bb) = workQ.pop()
-            if cur_bb in bbMap: # already visited cur_bb and created a copy
-                if from_bb is not None:
-                    from_bb._successors.append(bbMap[cur_bb])
-                    bbMap[cur_bb]._predecessors.append(from_bb)
-                continue
-
-            new_bb = BB(
-                cur_bb.label,
-                [bbMap[x] for x in cur_bb.predecessors() if x in bbMap],
-                [],
-                [],
-                False,
-            )
-
-            for pred in cur_bb.predecessors():
-                if pred not in bbMap:
-                    continue
-
-                bbMap[pred]._successors.append(new_bb)
-
-            bbMap[cur_bb] = new_bb
-
-            for stmt in cur_bb.stmts():
-                if isinstance(stmt, AstAssert):
-                    if new_bb.isInternal() and new_bb.label.startswith("_assert_"):
-                        new_bb.append(stmt)
-                    else:
-                        tmp_bb = BB(
-                            get_uid("_assert"),
-                            [new_bb],
-                            [stmt],
-                            [],
-                            True
-                        )
-                        new_bb._successors.append(tmp_bb)
-                        new_bb = tmp_bb
-                else:
-                    if new_bb.isInternal() and new_bb.label.startswith("_assert_"):
-                        tmp_bb = BB(
-                            get_uid("_assign"),
-                            [new_bb],
-                            [stmt],
-                            [],
-                            True
-                        )
-                        new_bb._successors.append(tmp_bb)
-                        new_bb = tmp_bb
-                    else:
-                        new_bb.append(stmt)
-
-            for succ in cur_bb.successors():
-                workQ.append((new_bb, succ))
-
-        return (Function(self.name, bbMap[self.entry()].reachable(),
-                         self.parameters, self.locals, self.returns), bbMap)
 
     def pp(self) -> str:
         def pp_bindings(b: Bindings_T) -> str:
