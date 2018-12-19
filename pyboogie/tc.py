@@ -1,5 +1,6 @@
 # Types
-from .ast import AstIntType, AstBoolType, AstBVType, AstMapType, AstCompoundType
+from .ast import AstIntType, AstBoolType, AstBVType, AstMapType,\
+        AstCompoundType
 # Expressions
 from .ast import AstExpr, AstFalse, AstTrue, AstNumber, AstId, AstWildcard,\
         AstMapIndex, AstMapUpdate, AstUnExpr, AstBinExpr, AstTernary,\
@@ -11,7 +12,8 @@ from .ast import AstStmt, AstLabel, AstOneExprStmt, AstAssignment, \
 from .ast import AstProgram, AstProcedure, AstFunctionDecl, AstImplementation,\
         AstDecl, AstBinding, AstNode, AstType, AstTypeConstructorDecl, \
         AstBody, AstVarDecl, AstConstDecl, AstAxiomDecl
-from typing import Union, Tuple, Optional, Any, Dict, Iterable, Generic, TypeVar, List
+from typing import Union, Tuple, Optional, Any, Dict, Iterable, Generic, \
+        TypeVar, List
 
 AstScope=Union[AstProgram, AstBody]
 
@@ -28,7 +30,7 @@ class BInt(BType, Singleton):
 class BBool(BType, Singleton):
     def __str__(self):  return "bool"
 class BBV(BType):
-    def __init__(self, nbits: int):
+    def __init__(self, nbits: int) -> None:
         self._nbits = nbits
     def __eq__(self, other):
         return isinstance(other, BBV) and self._nbits == other._nbits
@@ -36,7 +38,7 @@ class BBV(BType):
         return hash(self._nbits)
     def __str__(self):  return "bv{}".format(self._nbits)
 class BMap(BType):
-    def __init__(self, domain: List[BType], range: BType):
+    def __init__(self, domain: List[BType], range: BType) -> None:
         self._domain = domain
         self._range = range
     def __eq__(self, other):
@@ -48,7 +50,7 @@ class BMap(BType):
     def __str__(self):
         return "[{}]{}".format(str(self._domain), str(self._range))
 class BLambda(BType):
-    def __init__(self, args: Tuple[BType,...], ret: BType):
+    def __init__(self, args: Tuple[BType,...], ret: BType) -> None:
         self._args = args
         self._return = ret
     def __eq__(self, other):
@@ -62,7 +64,7 @@ class BLambda(BType):
 class BProcedure(BType):
     """ Type of a procedure. Only used internally - not an actual type in
         Boogie's type system. """
-    def __init__(self, args: Tuple[BType,...], rets: Tuple[BType, ...]):
+    def __init__(self, args: Tuple[BType,...], rets: Tuple[BType, ...]) -> None:
         self._args = args
         self._returns = rets
     def __eq__(self, other):
@@ -76,7 +78,7 @@ class BProcedure(BType):
 class BUserType(BType):
     """ Type of a procedure. Only used internally - not an actual type in
         Boogie's type system. """
-    def __init__(self, name: str, args: Tuple[BType, ...]):
+    def __init__(self, name: str, args: Tuple[BType, ...]) -> None:
         self._name = name
         self._args = args 
     def __eq__(self, other):
@@ -89,20 +91,18 @@ class BUserType(BType):
         return "{} {}".format(self._name, " ".join(map(str, self._args)))
 
 class BTypeError(Exception):
-    def __init__(self, loc, msg: str):
-        self._loc = loc;
-        self._msg = msg;
+    def __init__(self, loc, msg: str) -> None:
+        self._loc = loc
+        self._msg = msg
 
     def __str__(self):
-        return "BTypeError in " + str(self._loc) + ": " + self._msg;
+        return "BTypeError in " + str(self._loc) + ": " + self._msg
 
-
-Declaration=Union[AstDecl, AstBinding]
 
 ScopeT=TypeVar("ScopeT")
 DeclT=TypeVar("DeclT")
 class Scope(Generic[ScopeT, DeclT]):
-    def __init__(self, astRoot: ScopeT, parent: Optional["Scope"]):
+    def __init__(self, astRoot: ScopeT, parent: Optional["Scope"]) -> None:
         self._root = astRoot
         self._parent = parent
         self._bindings: Dict[str, DeclT] = {}
@@ -111,7 +111,7 @@ class Scope(Generic[ScopeT, DeclT]):
         if (Id in self._bindings):
             raise BTypeError(self._root, "{} defined more than once".format(Id))
 
-        self._bindings[Id] = typ;
+        self._bindings[Id] = typ
 
     def lookup(self, Id: str) -> Optional[DeclT]:
         if Id in self._bindings:
