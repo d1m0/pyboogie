@@ -153,6 +153,7 @@ class BoogieScope:
         procScope: Dict[str, BProcedure] = {}
         self._parent = parent
         self._root = root
+        self._revMap : Dict[int, BoogieScope] = {}
 
         if (isinstance(root, AstProgram)):
             assert parent is None
@@ -171,6 +172,9 @@ class BoogieScope:
         self._funScope: Dict[str, BLambda] = funScope
         self._varScope: Dict[str, BType] = varScope
         self._procScope: Dict[str, BProcedure] = procScope
+
+        if (parent is not None):
+            parent._revMap[id(self._root)] = self
 
     def _define(self, Id: str, obj: T, mapping: Dict[str, T]):
         if (Id in mapping):
@@ -226,6 +230,25 @@ class BoogieScope:
             return self._parent.lookupProc(name)
 
         return None
+
+    def lookupScope(self, root: ScopeModifierNodes) -> Optional["BoogieScope"]:
+        if (self._root == root):
+            return self
+        else:
+            key = id(root)
+            res: Optional[BoogieScope] = self._revMap.get(key, None)
+
+            if (res is not None):
+                return res
+
+            for child in self._revMap.values():
+                res = child.lookupScope(root)
+
+                if (res is not None):
+                    return res
+
+            return res
+
 
 
 def flatBindings(bindings: Iterable[AstBinding]) -> Iterable[Tuple[str, AstType]]:
