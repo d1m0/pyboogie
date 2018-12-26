@@ -13,82 +13,116 @@ from .ast import AstProgram, AstProcedure, AstFunctionDecl, AstImplementation,\
         AstDecl, AstBinding, AstNode, AstType, AstTypeConstructorDecl, \
         AstBody, AstVarDecl, AstConstDecl, AstAxiomDecl
 from typing import Union, Tuple, Optional, Any, Dict, Iterable, Generic, \
-        TypeVar, List
+        TypeVar, List, Callable
 
-AstScope=Union[AstProgram, AstBody]
 
 class Singleton:
     def __eq__(self, other):
         return isinstance(other, self.__class__)
+
     def __hash__(self):
         return 42
 
-# Types:
-class BType:    pass
+
+class BType:
+    """ Boogie types base type """
+    pass
+
+
 class BInt(BType, Singleton):
-    def __str__(self):  return "int"
+    def __str__(self): return "int"
+
+
 class BBool(BType, Singleton):
-    def __str__(self):  return "bool"
+    def __str__(self): return "bool"
+
+
 class BBV(BType):
     def __init__(self, nbits: int) -> None:
         self._nbits = nbits
+
     def __eq__(self, other):
         return isinstance(other, BBV) and self._nbits == other._nbits
+
     def __hash__(self):
         return hash(self._nbits)
-    def __str__(self):  return "bv{}".format(self._nbits)
+
+    def __str__(self): return "bv{}".format(self._nbits)
+
+
 class BMap(BType):
     def __init__(self, domain: List[BType], range: BType) -> None:
         self._domain = domain
         self._range = range
+
     def __eq__(self, other):
         return isinstance(other, BMap) and \
                 self._domain == other._domain and \
                 self._range == other._range
+
     def __hash__(self):
         return hash((self._domain, self._range))
+
     def __str__(self):
         return "[{}]{}".format(str(self._domain), str(self._range))
+
+
 class BLambda(BType):
-    def __init__(self, args: Tuple[BType,...], ret: BType) -> None:
+    def __init__(self, args: Tuple[BType, ...], ret: BType) -> None:
         self._args = args
         self._return = ret
+
     def __eq__(self, other):
         return isinstance(other, BLambda) and \
                 self._args == other._args and \
                 self._return == other._return
+
     def __hash__(self):
         return hash((self._args, self._return))
+
     def __str__(self):
-        return "[{}]{}".format(",".join(map(str, self._args)), str(self._return))
+        return "[{}]{}".format(
+                ",".join(map(str, self._args)),
+                str(self._return))
+
+
 class BProcedure(BType):
     """ Type of a procedure. Only used internally - not an actual type in
         Boogie's type system. """
-    def __init__(self, args: Tuple[BType,...], rets: Tuple[BType, ...]) -> None:
+    def __init__(self, args: Tuple[BType, ...], rets: Tuple[BType, ...]) -> None:
         self._args = args
         self._returns = rets
+
     def __eq__(self, other):
         return isinstance(other, BProcedure) and \
                 self._args == other._args and \
                 self._returns == other._returns
+
     def __hash__(self):
         return hash((self._args, self._returns))
+
     def __str__(self):
         return "[{}]{}".format(str(self._args), str(self._returns))
+
+
 class BUserType(BType):
     """ Type of a procedure. Only used internally - not an actual type in
         Boogie's type system. """
     def __init__(self, name: str, args: Tuple[BType, ...]) -> None:
         self._name = name
-        self._args = args 
+        self._args = args
+
     def __eq__(self, other):
         return isinstance(other, BUserType) and \
                 self._name == other._name and \
                 self._args == other._args
+
     def __hash__(self):
         return hash((self._name, self._args))
+
     def __str__(self):
         return "{} {}".format(self._name, " ".join(map(str, self._args)))
+
 
 class BTypeError(Exception):
     def __init__(self, loc, msg: str) -> None:
@@ -99,44 +133,99 @@ class BTypeError(Exception):
         return "BTypeError in " + str(self._loc) + ": " + self._msg
 
 
-ScopeT=TypeVar("ScopeT")
-DeclT=TypeVar("DeclT")
-class Scope(Generic[ScopeT, DeclT]):
-    def __init__(self, astRoot: ScopeT, parent: Optional["Scope"]) -> None:
-        self._root = astRoot
+ScopeModifierNodes = Union[AstProgram, AstFunctionDecl, AstProcedure, AstImplementation, AstForallExpr]
+T = TypeVar("T")
+
+
+class BoogieScope:
+    def __init__(
+            self,
+            root: ScopeModifierNodes,
+            parent: Optional["BoogieScope"]) -> None:
+
+        # Per krml178 p.4: There are 4 independent scopes: Types are defined
+        # only at the Program level. We don't count the attribute namespace
+        # here
+        # TODO: Update to support TypeSynonyms
+        typeScope: Dict[str, AstTypeConstructorDecl] = {}
+        funScope: Dict[str, BLambda] = {}
+        varScope: Dict[str, BType] = {}
+        procScope: Dict[str, BProcedure] = {}
         self._parent = parent
-        self._bindings: Dict[str, DeclT] = {}
+        self._root = root
 
-    def define(self, Id: str, typ: DeclT):
-        if (Id in self._bindings):
-            raise BTypeError(self._root, "{} defined more than once".format(Id))
+        if (isinstance(root, AstProgram)):
+            assert parent is None
+        elif (isinstance(root, AstFunctionDecl) or
+              isinstance(root, AstProcedure) or
+              isinstance(root, AstImplementation) or
+              isinstance(root, AstForallExpr)):
+            assert parent is not None
+            typeScope = parent._typeScope
+            funScope = parent._funScope
+            procScope = parent._procScope
+        else:
+            assert False, "NYI Scope root {}".format(root)
 
-        self._bindings[Id] = typ
+        self._typeScope: Dict[str, AstTypeConstructorDecl] = typeScope
+        self._funScope: Dict[str, BLambda] = funScope
+        self._varScope: Dict[str, BType] = varScope
+        self._procScope: Dict[str, BProcedure] = procScope
 
-    def lookup(self, Id: str) -> Optional[DeclT]:
-        if Id in self._bindings:
-            return self._bindings[Id]
+    def _define(self, Id: str, obj: T, mapping: Dict[str, T]):
+        if (Id in mapping):
+            raise BTypeError(self._root,
+                             "{} defined more than once".format(Id))
+
+        mapping[Id] = obj
+
+    def defType(self, name: str, typ: AstTypeConstructorDecl):
+        self._define(name, typ, self._typeScope)
+
+    def lookupType(self, name: str) -> Optional[AstTypeConstructorDecl]:
+        if (name in self._typeScope):
+            return self._typeScope[name]
 
         if (self._parent is not None):
-            return self._parent.lookup(Id)
+            return self._parent.lookupType(name)
 
         return None
 
+    def defFun(self, name: str, typ: BLambda):
+        self._define(name, typ, self._funScope)
 
-# Per krml178 p.4: There are 5 independent scopes:
-# Types are defined only at the Program level.
-# TODO: Update to support TypeSynonyms
-TypeScope=Scope[AstProgram, AstTypeConstructorDecl]
-# Function names are also defined at the Program level
-FunctionScope=Scope[AstProgram, BLambda]
-# Constants and Variables can be defined at the Program or Procedure/Function
-# lvl
-VarScope=Scope[Union[AstProgram, AstFunctionDecl, AstProcedure, AstImplementation, AstForallExpr], BType]
-# Procedures can be defined at the Program level
-ProcedureScope=Scope[Union[AstProgram], BProcedure]
-# Attributes don't have definition statements so we don't track them
-# Our type-checking environment is a tuple of the 4 different scopes
-TCEnv=Tuple[TypeScope, FunctionScope, VarScope, ProcedureScope]
+    def lookupFun(self, name: str) -> Optional[BLambda]:
+        if (name in self._funScope):
+            return self._funScope[name]
+
+        if (self._parent is not None):
+            return self._parent.lookupFun(name)
+
+        return None
+
+    def defVar(self, name: str, typ: BType):
+        self._define(name, typ, self._varScope)
+
+    def lookupVar(self, name: str) -> Optional[BType]:
+        if (name in self._varScope):
+            return self._varScope[name]
+
+        if (self._parent is not None):
+            return self._parent.lookupVar(name)
+
+        return None
+
+    def defProc(self, name: str, typ: BProcedure):
+        self._define(name, typ, self._procScope)
+
+    def lookupProc(self, name: str) -> Optional[BProcedure]:
+        if (name in self._procScope):
+            return self._procScope[name]
+
+        if (self._parent is not None):
+            return self._parent.lookupProc(name)
+
+        return None
 
 
 def flatBindings(bindings: Iterable[AstBinding]) -> Iterable[Tuple[str, AstType]]:
@@ -144,12 +233,12 @@ def flatBindings(bindings: Iterable[AstBinding]) -> Iterable[Tuple[str, AstType]
         for name in b.names:
             yield (name, b.typ)
 
-def tcType(node: AstType, env: TCEnv) -> BType:
+
+def tcType(node: AstType, env: BoogieScope) -> BType:
     """ Type check a type specification in a given environment. Check that any
         identifiers in type constructors are in-scope and number of type
-        arguments for type constructors respect user definitions. Raise an 
+        arguments for type constructors respect user definitions. Raise an
         error on failure. Return the checked BType on success."""
-    (types, funcs, vars, procs) = env
     if (isinstance(node, AstIntType)):
         return BInt()
     elif (isinstance(node, AstBoolType)):
@@ -162,29 +251,37 @@ def tcType(node: AstType, env: TCEnv) -> BType:
         rangeT = tcType(node.rangeT, env)
         return BMap(domainT, rangeT)
     elif (isinstance(node, AstCompoundType)):
-        typConstr = types.lookup(node.name)
+        typConstr = env.lookupType(node.name)
         if (typConstr is None):
-            raise BTypeError(node, "Unknown user defined type {}".format(node.name))
+            raise BTypeError(
+                    node,
+                    "Unknown user defined type {}".format(node.name))
 
         typeArgs = [tcType(tArg, env) for tArg in node.typeArgs]
         formalArity = len(typConstr.formals)
         actualArity = len(typeArgs)
         if (actualArity != formalArity):
-            raise BTypeError(node, "Expected {} arguments for {} but got {}".format(formalArity, node.name, actualArity))
+            raise BTypeError(
+                    node,
+                    "Expected {} arguments for {} but got {}".format(
+                        formalArity,
+                        node.name,
+                        actualArity))
+
         return BUserType(node.name, tuple(typeArgs))
     else:
         assert False, "Unknown type: {}".format(node)
 
-def tcExpr(node: AstExpr, env: TCEnv) -> BType:
+
+def tcExpr(node: AstExpr, env: BoogieScope) -> BType:
     """ Type check an expression in a given environment and return the type of
         the expression. Raise a BTypeError on failure """
-    (types, funcs, vars, procs) = env
     if isinstance(node, AstFalse) or isinstance(node, AstTrue):
         return BBool()
     elif isinstance(node, AstNumber):
         return BInt()
     elif isinstance(node, AstId):
-        idT = vars.lookup(node.name)
+        idT = env.lookupVar(node.name)
         if idT is None:
             raise BTypeError(node, "Unknown var {}".format(node.name))
         return idT
@@ -195,10 +292,15 @@ def tcExpr(node: AstExpr, env: TCEnv) -> BType:
         tMap: BType = tcExpr(node.map, env)
         tIndex: List[BType] = [tcExpr(node.index, env)]
         if (not isinstance(tMap, BMap)):
-            raise BTypeError(node, "Expected map here {} instead got {}".format(node, tMap))
+            raise BTypeError(
+                    node,
+                    "Expected map here {} instead got {}".format(node, tMap))
 
         if tIndex != tMap._domain:
-            raise BTypeError(node, "Bad type for index in {} expected {} but got {}".format(node, tMap._domain, tIndex))
+            raise BTypeError(
+                    node,
+                    "Bad type for index in {} expected {} but got {}".format(
+                        node, tMap._domain, tIndex))
 
         return tMap._range
     elif isinstance(node, AstMapUpdate):
@@ -207,24 +309,36 @@ def tcExpr(node: AstExpr, env: TCEnv) -> BType:
         tVal = tcExpr(node.newVal, env)
 
         if (not isinstance(tMap, BMap)):
-            raise BTypeError(node, "Expected map here {} instead got {}".format(node, tMap))
+            raise BTypeError(
+                    node,
+                    "Expected map here {} instead got {}".format(node, tMap))
 
         if tIndex != tMap._domain:
-            raise BTypeError(node, "Bad type for index in {} expected {} but got {}".format(node, tMap._domain, tIndex))
+            raise BTypeError(
+                    node,
+                    "Bad type for index in {} expected {} but got {}".format(
+                        node, tMap._domain, tIndex))
 
         if tVal != tMap._range:
-            raise BTypeError(node, "Bad type for value in map update {} expected {} but got {}".format(node, tMap._range, tVal))
+            raise BTypeError(
+                    node,
+                    "Bad type for value in map update {} expected {} but got {}".format(
+                        node, tMap._range, tVal))
 
         return tMap
     elif isinstance(node, AstUnExpr):
         argT = tcExpr(node.expr, env)
         if (node.op == '!'):
-            if  (argT != BBool()):
-                raise BTypeError(node, "Expected boolean instead got {}".format(node.expr))
+            if (argT != BBool()):
+                raise BTypeError(
+                        node,
+                        "Expected boolean instead got {}".format(node.expr))
             return BBool()
         elif (node.op == '-'):
             if (argT != BInt()):
-                raise BTypeError(node, "Expected int instead got {}".format(node.expr))
+                raise BTypeError(
+                        node,
+                        "Expected int instead got {}".format(node.expr))
             return BInt()
         else:
             assert False, "Bad unary op {}".format(node.op)
@@ -234,15 +348,24 @@ def tcExpr(node: AstExpr, env: TCEnv) -> BType:
 
         if (node.op in ['+', '-', '*', '/', 'div', 'mod']):
             if lhsT != BInt() or rhsT != BInt():
-                raise BTypeError(node, "Bad args to {} in {}. Expect ints".format(node.op, node))
+                raise BTypeError(
+                        node,
+                        "Bad args to {} in {}. Expect ints".format(
+                            node.op, node))
             return BInt()
         elif (node.op in ['!=', '<=', '>=', '<:', '==', '<', '>']):
             if lhsT != rhsT:
-                raise BTypeError(node, "Bad args to {} in {}. Expect same types".format(node.op, node))
+                raise BTypeError(
+                        node,
+                        "Bad args to {} in {}. Expect same types".format(
+                            node.op, node))
             return BBool()
         elif (node.op in ['<===>', '==>', '||', '&&']):
             if lhsT != BBool() or rhsT != BBool():
-                raise BTypeError(node, "Bad args to {} in {}. Expect bools".format(node.op, node))
+                raise BTypeError(
+                        node,
+                        "Bad args to {} in {}. Expect bools".format(
+                            node.op, node))
             return BBool()
         else:
             assert False, "Bad op {}".format(node.op)
@@ -252,23 +375,28 @@ def tcExpr(node: AstExpr, env: TCEnv) -> BType:
         elseT = tcExpr(node.elseE, env)
 
         if (condT != BBool()):
-            raise BTypeError(node, "Ternary requires bool not {} in {}".format(condT, node))
+            raise BTypeError(
+                    node,
+                    "Ternary requires bool not {} in {}".format(condT, node))
         if (thenT != elseT):
-            raise BTypeError(node, "Ternary types disagree: {} and {}".format(thenT, elseT))
+            raise BTypeError(
+                    node,
+                    "Ternary types disagree: {} and {}".format(thenT, elseT))
 
         return thenT
     elif isinstance(node, AstForallExpr):
-        newVars: VarScope = Scope(node, vars)
+        newEnv = BoogieScope(node, env)
         for b in node.bindings:
             for name in b.names:
-                newVars.define(name, tcType(b.typ, env))
-        newEnv = (types, funcs, newVars, procs)
+                newEnv.defVar(name, tcType(b.typ, env))
         return tcExpr(node.expr, newEnv)
     elif isinstance(node, AstFuncExpr):
         argTypes = tuple([tcExpr(arg, env) for arg in node.ops])
-        funType: Optional[BType] = funcs.lookup(node.funcName)
+        funType: Optional[BType] = env.lookupFun(node.funcName)
         if (funType is None or not isinstance(funType, BLambda)):
-            raise BTypeError(node, "{} does not name a function".format(node.funcName))
+            raise BTypeError(
+                    node,
+                    "{} does not name a function".format(node.funcName))
 
         if argTypes != funType._args:
             raise BTypeError(node, "Argument mismatch in call {}".format(node))
@@ -276,25 +404,28 @@ def tcExpr(node: AstExpr, env: TCEnv) -> BType:
         return funType._return
     else:
         assert False, "Unknown expr: {}".format(node)
-        
 
-def tcStmt(node: AstStmt, env: TCEnv) -> None:
+
+def tcStmt(node: AstStmt, env: BoogieScope) -> None:
     """ Type check a statement in a given environment. Raise a BTypeError on
         failure. """
-    (types, funcs, vars, procs) = env
     if (isinstance(node, AstLabel)):
         # TODO: TC Labels
         tcStmt(node.stmt, env)
     elif (isinstance(node, AstOneExprStmt)):
         exprType = tcExpr(node.expr, env)
         if (exprType != BBool()):
-            raise BTypeError(node, "Expected boolean expression in {}".format(node))
+            raise BTypeError(
+                    node,
+                    "Expected boolean expression in {}".format(node))
     elif (isinstance(node, AstAssignment)):
         lhsTypes = [tcExpr(lhsId, env) for lhsId in node.lhs]
         rhsTypes = [tcExpr(rhsId, env) for rhsId in node.rhs]
 
         if (lhsTypes != rhsTypes):
-            raise BTypeError(node, "Type mismatch in assignment {}".format(node))
+            raise BTypeError(
+                    node,
+                    "Type mismatch in assignment {}".format(node))
     elif (isinstance(node, AstHavoc)):
         for id in node.ids:
             tcExpr(id, env)
@@ -303,75 +434,87 @@ def tcStmt(node: AstStmt, env: TCEnv) -> None:
     elif (isinstance(node, AstGoto)):
         pass
     elif (isinstance(node, AstCall)):
-        procType: Optional[BType] = procs.lookup(node.id)
+        procType: Optional[BType] = env.lookupProc(node.id)
 
         if (procType is None):
-            raise BTypeError(node, "Unknown procedure {} in call {}".format(node.id, node))
+            raise BTypeError(
+                    node,
+                    "Unknown procedure {} in call {}".format(node.id, node))
 
         if (not isinstance(procType, BProcedure)):
-            raise BTypeError(node, "{} not a procedure in call {}".format(node.id, node))
+            raise BTypeError(
+                    node,
+                    "{} not a procedure in call {}".format(node.id, node))
 
         if (node.lhs is None):
-            expectedReturns: Tuple[BType,...] = ()
+            expectedReturns: Tuple[BType, ...] = ()
         else:
             expectedReturns = tuple([tcExpr(lhs, env) for lhs in node.lhs])
 
         arguments = tuple([tcExpr(arg, env) for arg in node.arguments])
 
         if (procType._args != arguments):
-            raise BTypeError(node, "Mismatch in arguments in call {}".format(node.id, node))
+            raise BTypeError(
+                    node,
+                    "Mismatch in arguments in call {}".format(node.id, node))
 
         if (procType._returns != expectedReturns):
-            raise BTypeError(node, "Mismatch in arguments in call {}".format(node.id, node))
+            raise BTypeError(
+                    node,
+                    "Mismatch in arguments in call {}".format(node.id, node))
     else:
         assert False, "Unknown stmt: {}".format(node)
 
 
-def typeAccumulate(d: AstDecl, env: TCEnv) -> None:
+def typeAccumulate(d: AstDecl, env: BoogieScope) -> None:
     """ Accumulate definitions in the current environment from the definition
         d. Destructively updates the passed-in environment in-place.
     """
-    (types, funcs, vars, procs) = env
     if (isinstance(d, AstTypeConstructorDecl)):
-        if types.lookup(d.name) is not None:
-            raise  BTypeError(d, "Type {} defined twice".format(d.name))
+        if env.lookupType(d.name) is not None:
+            raise BTypeError(d, "Type {} defined twice".format(d.name))
 
-        types.define(d.name, d)
+        env.defType(d.name, d)
     elif (isinstance(d, AstVarDecl) or isinstance(d, AstConstDecl)):
         for name in d.binding.names:
-            if vars.lookup(name) is not None:
-                raise  BTypeError(d, "Var {} defined twice".format(name))
+            if env.lookupVar(name) is not None:
+                raise BTypeError(d, "Var {} defined twice".format(name))
 
-            vars.define(name, tcType(d.binding.typ, env))
+            env.defVar(name, tcType(d.binding.typ, env))
     elif (isinstance(d, AstFunctionDecl)):
-        if funcs.lookup(d.id) is not None:
-            raise  BTypeError(d, "Function {} defined twice".format(d.id))
+        if env.lookupFun(d.id) is not None:
+            raise BTypeError(d, "Function {} defined twice".format(d.id))
 
         newFunT = BLambda(
             tuple(tcType(b.typ, env) for b in d.parameters for name in b.names),
             tcType(d.returns, env))
-        funcs.define(d.id, newFunT)
+
+        env.defFun(d.id, newFunT)
     elif (isinstance(d, AstProcedure)):
-        if (procs.lookup(d.name) is not None):
-            raise BTypeError(d, "Procedure {} defined more than once".format(d.name))
+        if (env.lookupProc(d.name) is not None):
+            raise BTypeError(
+                    d,
+                    "Procedure {} defined more than once".format(d.name))
 
         procT = BProcedure(
             tuple(tcType(typ, env) for (_, typ) in flatBindings(d.parameters)),
             tuple(tcType(typ, env) for (_, typ) in flatBindings(d.returns)))
-        procs.define(d.name, procT)
+        env.defProc(d.name, procT)
     elif (isinstance(d, AstImplementation)):
-        pass # Implementation don't add names to the proc space
+        pass  # Implementation don't add names to the proc space
     elif (isinstance(d, AstAxiomDecl)):
-        pass # Axioms are anonymous
+        pass  # Axioms are anonymous
     else:
-        raise BTypeError(d, "Don't know how to handle decl of type {}: {}".format(type(d), d))
+        raise BTypeError(
+                d,
+                "Don't know how to handle decl of type {}: {}".format(
+                    type(d), d))
 
 
-def tcDecl(d: AstDecl, env: TCEnv) -> None:
+def tcDecl(d: AstDecl, env: BoogieScope) -> None:
     """ Type check a declaration in a given environment. Does not update the
         passed-in environment.
     """
-    (types, funcs, vars, procs) = env
     if (isinstance(d, AstTypeConstructorDecl)):
         pass
     elif (isinstance(d, AstVarDecl) or isinstance(d, AstConstDecl)):
@@ -383,12 +526,11 @@ def tcDecl(d: AstDecl, env: TCEnv) -> None:
 
         if (d.body is not None):
             # Check function body in new scope with parameters declared
-            bodyVars: VarScope = Scope(d, vars)
+            newEnv = BoogieScope(d, env)
             for (name, typ) in flatBindings(d.parameters):
-                bodyVars.define(name, tcType(typ, env))
+                newEnv.defVar(name, tcType(typ, env))
 
-            bodyEnv = (types, funcs, bodyVars, procs)
-            retT = tcExpr(d.body, bodyEnv)
+            retT = tcExpr(d.body, newEnv)
 
             # Check type of body agrees with return type
             if retT != newFunT._return:
@@ -408,51 +550,58 @@ def tcDecl(d: AstDecl, env: TCEnv) -> None:
 
         # First check implementation agrees with corresponding procedure
         if (isinstance(d, AstImplementation)):
-            procT = procs.lookup(d.name)
+            procT = env.lookupProc(d.name)
             if procT is None:
-                raise BTypeError(d, "Implementaion {} missing procedure definition".format(d.name))
-            if (procT != implT):
-                raise BTypeError(d, "Implementaion {} disagrees with procedure".format(d.name))
+                raise BTypeError(
+                        d,
+                        "Implementaion {} missing procedure definition".format(
+                            d.name))
 
-        bodyVars = Scope(procOrImpl, vars)
+            if (procT != implT):
+                raise BTypeError(
+                        d,
+                        "Implementaion {} disagrees with procedure".format(
+                            d.name))
+
+        newEnv = BoogieScope(procOrImpl, env)
+
         for (name, typ) in flatBindings(params):
-            bodyVars.define(name, tcType(typ, env))
+            newEnv.defVar(name, tcType(typ, env))
         for (name, typ) in flatBindings(rets):
-            bodyVars.define(name, tcType(typ, env))
+            newEnv.defVar(name, tcType(typ, env))
 
         if (isinstance(d, AstProcedure)):
-            reqEnsEnv = (types, funcs, bodyVars, procs)
             # We check requires/ensures in the environment
             # including only parameters and returns
             for (_, expr) in d.requires + d.ensures:
-                predT = tcExpr(expr, reqEnsEnv)
+                predT = tcExpr(expr, newEnv)
                 if (predT != BBool()):
                     raise BTypeError(d, "Require/ensure not a boolean")
 
             # Only check modifies in the global variable environment
             for (_, var) in d.modifies:
-                if (vars.lookup(var) is None):
-                    raise BTypeError(d, "Unknown var in modifies: {}".format(var))
+                if (env.lookupVar(var) is None):
+                    raise BTypeError(
+                            d,
+                            "Unknown var in modifies: {}".format(var))
 
         if (procOrImpl.body is not None):
             for (name, typ) in flatBindings(localVars):
-                bodyVars.define(name, tcType(typ, env))
+                newEnv.defVar(name, tcType(typ, env))
 
-            bodyEnv = (types, funcs, bodyVars, procs)
             for stmt in procOrImpl.body.stmts:
-                tcStmt(stmt, bodyEnv)
+                tcStmt(stmt, newEnv)
     elif isinstance(d, AstAxiomDecl):
         tcExpr(d.expr, env)
     else:
-        raise BTypeError(d, "Don't know how to handle decl of type {}: {}".format(type(d), d))
+        raise BTypeError(
+                d,
+                "Don't know how to handle decl of type {}: {}".format(
+                    type(d), d))
 
-def tcProg(p: AstProgram) -> TCEnv:
-    typeScope: TypeScope = Scope(p, None)
-    funScope: FunctionScope = Scope(p, None)
-    varScope: VarScope = Scope(p, None)
-    procScope: ProcedureScope = Scope(p, None)
 
-    env = (typeScope, funScope, varScope, procScope)
+def tcProg(p: AstProgram) -> BoogieScope:
+    env = BoogieScope(p, None)
 
     # First accumulate just the type definitions
     for d in p.decls:

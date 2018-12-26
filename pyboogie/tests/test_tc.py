@@ -11,7 +11,7 @@ from ..ast import parseAst, parseExprAst, parseStmt, parseDecl, AstProgram, AstI
     AstTypeConstructorDecl, astBuilder, AstAttribute, AstAssert, AstAssume,\
     AstIf, AstWildcard, AstTernary
 from pyparsing import ParseException, StringEnd
-from ..tc import tcExpr, tcStmt, tcDecl, tcProg, BTypeError, BType, BInt, BBool, Scope, BMap, BLambda, BProcedure, typeAccumulate
+from ..tc import tcExpr, tcStmt, tcDecl, tcProg, BTypeError, BType, BInt, BBool, BoogieScope, BMap, BLambda, BProcedure, typeAccumulate
 from typing import List, Tuple, Any
 
 class TestExprTC(TestCase):
@@ -74,13 +74,11 @@ class TestExprTC(TestCase):
         """
         for (exprText, expType, (vars, funs)) in self.goodExprs:
             expr = parseExprAst(exprText)
-            varScope = Scope(None, None)
-            funScope = Scope(None, None)
+            env = BoogieScope(AstProgram([]), None)
             for (name, typ) in vars:
-                varScope.define(name, typ)
+                env.defVar(name, typ)
             for (name, typ) in funs:
-                funScope.define(name, typ)
-            env = (Scope(None, None), funScope, varScope, Scope(None, None))
+                env.defFun(name, typ)
             typ = tcExpr(expr, env)
 
             assert typ == expType, "Expected {} got {}".format(expType, typ)
@@ -90,13 +88,11 @@ class TestExprTC(TestCase):
         """
         for (exprText, vars, funs) in self.badExprs:
             expr = parseExprAst(exprText)
-            varScope = Scope(None, None)
-            funScope = Scope(None, None)
+            env = BoogieScope(AstProgram([]), None)
             for (name, typ) in vars:
-                varScope.define(name, typ)
+                env.defVar(name, typ)
             for (name, typ) in funs:
-                funScope.define(name, typ)
-            env = (Scope(None, None), funScope, varScope, Scope(None, None))
+                env.defFun(name, typ)
             with self.assertRaises(BTypeError):
                 tcExpr(expr, env)
 
@@ -130,17 +126,15 @@ class TestStmtTC(TestCase):
         """
         for (stmtText, vars, funs, procs) in self.goodStmts:
             stmt = parseStmt(stmtText)
-            varScope = Scope(None, None)
-            funScope = Scope(None, None)
-            procScope = Scope(None, None)
+            env = BoogieScope(AstProgram([]), None)
 
             for (name, typ) in vars:
-                varScope.define(name, typ)
+                env.defVar(name, typ)
             for (name, typ) in funs:
-                funScope.define(name, typ)
+                env.defFun(name, typ)
             for (name, typ) in procs:
-                procScope.define(name, typ)
-            env = (Scope(None, None), funScope, varScope, procScope)
+                env.defProc(name, typ)
+
             tcStmt(stmt, env)
 
     def testBadStmts(self):
@@ -148,17 +142,15 @@ class TestStmtTC(TestCase):
         """
         for (stmtText, vars, funs, procs) in self.badStmts:
             stmt = parseStmt(stmtText)
-            varScope = Scope(None, None)
-            funScope = Scope(None, None)
-            procScope = Scope(None, None)
+            env = BoogieScope(AstProgram([]), None)
 
             for (name, typ) in vars:
-                varScope.define(name, typ)
+                env.defVar(name, typ)
             for (name, typ) in funs:
-                funScope.define(name, typ)
+                env.defFun(name, typ)
             for (name, typ) in procs:
-                procScope.define(name, typ)
-            env = (Scope(None, None), funScope, varScope, procScope)
+                env.defProc(name, typ)
+
             with self.assertRaises(BTypeError):
                 tcStmt(stmt, env)
 
@@ -203,17 +195,15 @@ class TestDeclTC(TestCase):
         """
         for (declText, vars, funs, procs) in self.goodDecls:
             decl = parseDecl(declText)
-            varScope = Scope(None, None)
-            funScope = Scope(None, None)
-            procScope = Scope(None, None)
+            env = BoogieScope(AstProgram([]), None)
 
             for (name, typ) in vars:
-                varScope.define(name, typ)
+                env.defVar(name, typ)
             for (name, typ) in funs:
-                funScope.define(name, typ)
+                env.defFun(name, typ)
             for (name, typ) in procs:
-                procScope.define(name, typ)
-            env = (Scope(None, None), funScope, varScope, procScope)
+                env.defProc(name, typ)
+
             typeAccumulate(decl, env)
             tcDecl(decl, env)
 
@@ -222,17 +212,15 @@ class TestDeclTC(TestCase):
         """
         for (declText, vars, funs, procs) in self.badDecls:
             decl = parseDecl(declText)
-            varScope = Scope(None, None)
-            funScope = Scope(None, None)
-            procScope = Scope(None, None)
+            env = BoogieScope(AstProgram([]), None)
 
             for (name, typ) in vars:
-                varScope.define(name, typ)
+                env.defVar(name, typ)
             for (name, typ) in funs:
-                funScope.define(name, typ)
+                env.defFun(name, typ)
             for (name, typ) in procs:
-                procScope.define(name, typ)
-            env = (Scope(None, None), funScope, varScope, procScope)
+                env.defProc(name, typ)
+
             with self.assertRaises(BTypeError):
                 typeAccumulate(decl, env)
                 tcDecl(decl, env)
