@@ -222,7 +222,6 @@ class Function(object):
         self.parameters = parameters
         self.locals = local_vars 
         self.returns = returns
-        self._rewrite_assingments()
 
     def entry(self) -> BB:
         return unique([bb for bb in self._bbs.values() if not bb.isInternal() and bb.isEntry()])
@@ -287,38 +286,6 @@ class Function(object):
 
     def get_bb(self, label: LabelT) -> BB:
         return self._bbs[label]
-
-    def _rewrite_assingments(self) -> None:
-        """ Rewrite all assignments of the form:
-            a[i] := v;
-            to:
-            a = a[i:=v];
-
-            This applies to multi-dimensional maps:
-            a[i][j] := v;
-            to:
-            a = a[i:=a[i][j:=v]]
-        """
-        for bb in self.bbs():
-            for stmt_idx in range(len(bb)):
-                stmt = bb[stmt_idx]
-                if (not isinstance(stmt, AstAssignment)):
-                    continue
-
-                lhsL: List[Union[AstId, AstMapIndex]] = []
-                rhsL: List[AstExpr] = []
-
-                for (lhs, rhs) in zip(stmt.lhs, stmt.rhs):
-                    while (isinstance(lhs, AstMapIndex)):
-                        rhs = AstMapUpdate(lhs.map, lhs.index, rhs)
-                        assert (isinstance(lhs.map, AstMapIndex) or
-                                isinstance(lhs.map, AstId))
-                        lhs = lhs.map
-
-                    lhsL.append(lhs)
-                    rhsL.append(rhs)
-
-                bb[stmt_idx] = AstAssignment(lhsL, rhsL)
 
     def to_json(self) -> Any:
         """ Convert self to a JSON-like python object. If you want a string

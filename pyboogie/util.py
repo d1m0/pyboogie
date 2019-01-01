@@ -76,6 +76,11 @@ def first(it: Iterable[T], pred: Callable[[T], bool]) -> int:
 _uids = {}  # type: Dict[str,int]
 
 
+def resetUIDCtrs():
+    """Reset uid counters. Only used by testing to get deterministic ids"""
+    global _uids
+    _uids = {}
+
 def get_uid(prefix: str) -> str:
     global _uids
 

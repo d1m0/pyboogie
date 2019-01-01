@@ -119,7 +119,7 @@ class TestBB(TestCase):
                 }
             """,
             ["main", [], [("x", "[int]int"), ("y", "int")], [], [
-                ("start", [], ["x:=x[y:=0];"], []),
+                ("start", [], ["x[y]:=0;"], []),
                 ]
             ]
         ),
@@ -133,7 +133,7 @@ class TestBB(TestCase):
                 }
             """,
             ["main", [], [("x", "[int][int]int"), ("y", "int"), ("z", "int")], [], [
-                ("start", [], ["x:=x[y:=x[y][z:=0]];"], []),
+                ("start", [], ["x[y][z]:=0;"], []),
                 ]
             ]
         ),
