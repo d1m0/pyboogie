@@ -149,6 +149,5 @@ def desugarDecl(d: AstDecl) -> AstDecl:
     else:
         assert False, "NYI desugaring of decl {}".format(d)
 
-
 def desugar(p: AstProgram) -> AstProgram:
     return AstProgram([desugarDecl(d) for d in p.decls])
