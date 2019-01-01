@@ -335,6 +335,45 @@ class TestProgTC(TestCase):
                         assert true;
                         return;
                  }"""),
+            ( """
+                 procedure foo() {
+                    var m: [int]int;
+                    m[1] := 2;
+                    return;
+                 }""", 
+              """
+                 procedure foo() {
+                    var m: [int]int;
+                    __entry__:
+                    m := m[1:= 2];
+                    return;
+                 }"""), 
+            ( """
+                 procedure foo() {
+                    var m: [int][int]int;
+                    m[1][2] := 3;
+                    return;
+                 }""", 
+              """
+                 procedure foo() {
+                    var m: [int][int]int;
+                    __entry__:
+                    m := m[1:=m[1][2:=3]];
+                    return;
+                 }"""), 
+            ( """
+                 procedure foo() {
+                    var m: [int,int]int;
+                    m[1,2] := 3;
+                    return;
+                 }""", 
+              """
+                 procedure foo() {
+                    var m: [int][int]int;
+                    __entry__:
+                    m := m[1,2:=3];
+                    return;
+                 }"""), 
     ]
 
     def test(self):
