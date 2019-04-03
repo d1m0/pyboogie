@@ -1,9 +1,9 @@
 from .ast import stmt_changed, AstAssignment, AstId, AstHavoc, \
         AstAssert, AstTrue, replace, AstNode, AstExpr, AstStmt, LabelT
 from .z3_embed import Or, And, Int, And, stmt_to_z3, satisfiable,\
-    model, Z3TypeEnv, boogieToZ3TypeEnv
+    model, Z3TypeEnv, boogieToZ3TypeEnv, get_ssa_tenv
 from .bb import BB, Function
-from .ssa import SSAEnv, is_ssa_str, ReplMap_T, get_ssa_tenv
+from .ssa import SSAEnv, is_ssa_str, ReplMap_T
 from .predicate_transformers import wp_stmts, sp_stmts
 from .util import flattenList, first, ccast
 from .interp import Store

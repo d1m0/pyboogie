@@ -1,12 +1,12 @@
 from .z3_embed import And, stmt_to_z3, satisfiable, Int,\
     maybeModel, expr_to_z3, simplify, model, Z3TypeEnv,\
-    _force_expr as _z3_force_expr, boogieToZ3TypeEnv
+    _force_expr as _z3_force_expr, boogieToZ3TypeEnv, get_ssa_tenv
 from .ast import expr_read, AstAssume, AstAssert, replace, AstId,\
         AstNumber, AstExpr, AstStmt, ReplMap_T
 from .paths import nd_bb_path_to_ssa, \
         extract_ssa_path_vars, NondetPath, NondetSSAPath, NondetPathEnvs_T
 from .predicate_transformers import sp_stmts
-from .ssa import SSAEnv, get_ssa_tenv
+from .ssa import SSAEnv
 from .bb import Function, BB
 from .interp import Store, store_to_expr
 from .util import ccast

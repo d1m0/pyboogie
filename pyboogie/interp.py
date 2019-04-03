@@ -3,11 +3,22 @@ from copy import copy
 from .util import unique, ccast
 from .ast import AstAssert, AstAssume, AstHavoc, AstAssignment, AstGoto, \
   AstReturn, AstUnExpr, AstBinExpr, AstNumber, AstId, AstTrue, AstFalse, \
-  AstExpr, AstMapIndex, ast_and, AstForallExpr, AstBinding, AstIntType
-from typing import Any, Dict, Callable, Union, Iterable, Tuple, Set, List, NamedTuple
+  AstExpr, AstMapIndex, ast_and, AstForallExpr, AstBinding, AstIntType, ReplMap_T, \
+  AstMapUpdate
+from typing import Any, Dict, Callable, Union, Iterable, Tuple, Set, List, NamedTuple, Optional
+from .ssa import SSAEnv
+from .ssa import SSAEnv, is_ssa_str, unssa_str
+from frozendict import frozendict
+from typing import Any, Dict, Callable, Union, Iterable, Tuple, Set, List, NamedTuple, Optional
+from pyparsing import Forward, nums, Word, ParserElement, ParseResults, delimitedList as csl, StringEnd,\
+  Optional as O,\
+  Literal as L,\
+  Group as G, \
+  Suppress as S
+import re
 
-class FuncInterp:
-    def __init__(self, explicit_cases: Dict["BoogieVal", "BoogieVal"], default: "BoogieVal") -> None:
+class BoogieMap:
+    def __init__(self, explicit_cases: Dict["BoogieVal", "BoogieVal"], default: Optional["BoogieVal"]=None) -> None:
       self._explicit_cases = explicit_cases
       self._default_case = default
 
@@ -15,12 +26,75 @@ class FuncInterp:
       return hash((tuple(sorted(self._explicit_cases.items())), self._default_case))
 
     @staticmethod
-    def to_dict(f: "FuncInterp") -> Dict[Any, Any]:
+    def to_dict(f: "BoogieMap") -> Dict[Any, Any]:
       return { "default": f._default_case, "explicit": f._explicit_cases }
 
     @staticmethod
-    def from_dict(d: Dict[Any, Any]) -> "FuncInterp":
-      return FuncInterp(d["explicit"], d["default"])
+    def from_dict(d: Dict[Any, Any]) -> "BoogieMap":
+      return BoogieMap(d["explicit"], d["default"])
+
+    def lookup(self, key: "BoogieVal") -> "BoogieVal":
+      if key in self._explicit_cases:
+        return self._explicit_cases[key]
+      else:
+        return self._default_case
+
+    def mapUpdate(self, val: "BoogieMap", key: "BoogieVal", newVal: "BoogieVal"):
+      if key in val._explicit_cases:
+        if newVal == val._default_case:
+          del val._explicit_cases[key]
+        else:
+          self._explicit_cases[key] = newVal
+      else:
+        self._explicit_cases.update({key: newVal})
+      return BoogieMap(val._explicit_cases, val._default_case)
+
+    def __eq__(self, other: object) -> bool:
+      if not isinstance(other, BoogieMap):
+        return False
+      return self._explicit_cases == other._explicit_cases and self._default_case == other._default_case 
+
+    def __str__(self):
+      s = "{"
+      s += ",".join([str(k) + ":" + str(v) for (k,v) in self._explicit_cases.items()])
+      if self._default_case is not None:
+        s += "|" + str(self._default_case)
+      s += "}"
+      return s
+
+class BoogieValParser:
+  def __init__(self) -> None:
+    BoogieInt: ParserElement["BoogieVal"] = O("-") + Word(nums)
+
+    def parseInt(s: str, loc: int, toks: "ParseResults[Any]") -> List["BoogieVal"]:
+      return [int("".join(toks))]
+    BoogieInt.setParseAction(parseInt)
+
+    BoogieBool: ParserElement["BoogieVal"] = L("True") | L("False")
+
+    def parseBool(s: str, loc: int, toks: "ParseResults[Any]") -> List["BoogieVal"]:
+      return [toks[0]=="True"]
+    BoogieBool.setParseAction(parseBool)
+
+    BoogieMapRule: Forward = Forward()
+    BoogieValRule: ParserElement["BoogieVal"] = BoogieInt | BoogieBool | BoogieMapRule
+    BoogieMapRule << (S(L("{")) + G(csl(G(BoogieValRule + S(L(":")) + BoogieValRule))) +\
+                                    O(S(L("|")) + BoogieValRule) + S(L("}")))
+
+    def parseMap(s: str, loc: int, toks: "ParseResults[Any]") -> List[BoogieVal]:
+      print(toks)
+      explicitVals : Dict["BoogieVal", "BoogieVal"] = {key: val for (key,val) in toks[0]}
+      defaultVal: Optional["BoogieVal"] = None
+      if (len(toks) == 2):
+        defaultVal = toks[1]
+      return [BoogieMap(explicitVals, defaultVal)]
+
+    BoogieMapRule.setParseAction(parseMap)
+    self._root = BoogieValRule
+
+  def parse(self, s: str) -> "BoogieVal":
+    return self._root.parseString(s)[0]
+ 
 
 class OpaqueVal(object):
     @staticmethod
@@ -31,7 +105,9 @@ class OpaqueVal(object):
     def from_dict(d: Dict[Any, Any]) -> "OpaqueVal":
       return OpaqueVal()
 
-BoogieVal = Union[int, bool, FuncInterp, OpaqueVal]
+#TODO(shraddha): After arrays are implemented, think about whether OpaqueVal is still neccessary. This may
+# require looking at the KRML document, to try and see what other concrete data-types and values exist in Boogie?
+BoogieVal = Union[int, bool, BoogieMap, OpaqueVal]
 Store = Dict[str, BoogieVal]
 PC = NamedTuple("PC", [("bb", BB), ("next_stmt", int)])
 State = NamedTuple("State", [("pc", PC), ("store", Store), ("status", str)])
@@ -49,26 +125,52 @@ def val_to_ast(v: BoogieVal) -> AstExpr:
   else:
     assert False, "Can't convert {} to ast node".format(v)
 
+keyfactory = SSAEnv()
+
+def map_to_expr(val: BoogieMap, ex: AstExpr) -> AstExpr:
+	"""Given a Boogie map 'val' and an AstExpr 'ex' return a Boogie expression equivalent to ex contains val
+	For example: val is {5->6, _->0} and ex is a[3] then map_to_expr returns
+
+	a[3][5] == 6 && forall j: int :: (j != 5) ==> a[3][j] == 0
+	"""
+	exprs : List[AstExpr] = []
+
+	for(fromV, toV) in val._explicit_cases.items():
+		arr_index = AstMapIndex(ex, val_to_ast(fromV))
+
+		if(isinstance(toV,int)):
+			exprs.append(AstBinExpr(arr_index, "==", val_to_ast(toV)))
+		else:
+			exprs.append(map_to_expr(toV, arr_index))
+
+	if val._default_case is not None:
+		keyname = keyfactory.lookup("_key_")
+		keyfactory.update("_key_")
+		key = AstId(keyname)
+		new_ex = AstMapIndex(ex,key)
+		not_explicit = ast_and([AstBinExpr(key, "!=", val_to_ast(x)) for x in val._explicit_cases.keys()])
+
+		if (isinstance(val._default_case, int)):
+			anticedent : AstExpr = AstBinExpr(new_ex, "==", val_to_ast(val._default_case))
+		else:
+			anticedent = map_to_expr(val._default_case, new_ex)
+
+		implication = AstForallExpr((AstBinding(("_key_",), AstIntType()),),
+                                     AstBinExpr(not_explicit, "==>", anticedent))
+
+		exprs.append(implication)
+
+	return ast_and(exprs)
+
+#TODO(Shraddha) : Consider the bool case
+
 def store_to_expr(s: Store, suff:str ="") -> AstExpr:
-    """ Create a boolean expression that is equivalent to the store s
-    """
-    exprs = [] # type: List[AstExpr]
+    exprs : List[AstExpr] = []
     for (var, val) in s.items():
-        if isinstance(val, FuncInterp):
-            explicit_vals = [] # type: List[AstExpr]
-            for (fromV, toV) in val._explicit_cases.items():
-                exprs.append(AstBinExpr(AstMapIndex(AstId(var + suff), val_to_ast(fromV)), "==", val_to_ast(toV)))
-                explicit_vals.append(val_to_ast(fromV))
-            # TODO: Generalize to multidimensional arrays
-            # TODO: Assert that the domain of var is indeed int!
-            if val._default_case is not None:
-              key = AstId("_key_")
-              not_explicit = ast_and([AstBinExpr(key, "!=", x) for x in explicit_vals])
-              exprs.append(AstForallExpr((AstBinding(("_key_",), AstIntType()),),
-                                     AstBinExpr(not_explicit, "==>",
-                                                AstBinExpr(AstMapIndex(AstId(var + suff), key), "==", val._default_case))))
-        else:
-            exprs.append(AstBinExpr(AstId(var + suff), "==", val_to_ast(val)))
+      if isinstance(val, BoogieMap):
+			      exprs.append(map_to_expr(val, AstId(var + suff)))
+      else:
+			      exprs.append(AstBinExpr(AstId(var + suff), "==", val_to_ast(val)))
 
     return ast_and(exprs)
 
@@ -113,6 +215,10 @@ _relational_bin = {
 
 class BoogieRuntimeExc(Exception):  pass
 
+# TODO(shraddha): This needs to be update 2 new expressions: 
+#  1) indexing expressions - e.g. arr[x]
+#  2) map update expressions - e.g. arr[x:=5]. The expression arr[x:=5] means a new map, that is the same
+# as the arr map, except for at the index corresponding to the value of x, it maps to 5.
 def eval_quick(expr: AstExpr, store: Store) -> BoogieVal:
   """
   Evaluate an expression in a given environment. Boogie expressions are always
@@ -129,11 +235,9 @@ def eval_quick(expr: AstExpr, store: Store) -> BoogieVal:
     return False
   elif isinstance(expr, AstId):
     try:
-      v = store[expr.name]
-      assert isinstance(v, int) # Currently can only handle int vars
-      return v
+      return store[expr.name]
     except KeyError:
-      raise BoogieRuntimeExc("Unkown id {}".format(expr.name))
+      raise BoogieRuntimeExc("Unknown id {}".format(expr.name))
   elif isinstance(expr, AstUnExpr):
     inner = eval_quick(expr.expr, store)
     op = expr.op
@@ -171,8 +275,23 @@ def eval_quick(expr: AstExpr, store: Store) -> BoogieVal:
 
       return _relational_bin[op](lhs, rhs)
     assert False, "Unknown binary op {}".format(op)
+
+    if isinstance(expr, AstMapIndex):
+      boogieMap : BoogieMap = ccast(eval_quick(expr.map, store), BoogieMap)
+      index : BoogieVal = eval_quick(expr.index, store)
+
+      return boogieMap.lookup(index)
+
+    if isinstance(expr, AstMapUpdate):
+      uboogieMap : BoogieMap = ccast(eval_quick(expr.map, store), BoogieMap)
+      uindex : BoogieVal = eval_quick(expr.index, store)
+      newVal : BoogieVal = eval_quick(expr.newVal, store)
+      newMap = uboogieMap.mapUpdate(uboogieMap, uindex, newVal)
+
+      return newMap
+
   else:
-    assert False, "Unkown expression {}".format(expr)
+    assert False, "Unknown expression {}".format(expr)
 
 
 def stalled(s):
@@ -248,6 +367,14 @@ def interp_one(state: State, rand: RandF) -> Iterable[State]:
 
     yield State(PC(bb, next_stmt + 1), store, status)
 
+def unssa_z3_model(m: Store, repl_m: ReplMap_T) -> Store:
+    updated = list(map(str, iter(repl_m.keys())))
+    original = [ x for x in m.keys() if not is_ssa_str(x) and x not in updated ]
+    res = { (unssa_str(x) if is_ssa_str(x) else x) : m.get(x, None)
+                for x in original + list(map(str, iter(repl_m.values())))
+          }
+    return frozendict(res)
+
 def trace_n(state: State, nsteps: int, rand: RandF, filt: ChoiceF)-> Tuple[List[Trace], List[Trace]]:
   """
   Given a program bbs and a current state state, and number of steps nsteps
@@ -321,8 +448,16 @@ if __name__ == "__main__":
   args = p.parse_args()
 
   fun = unique(Function.load(args.file)) # type: Function
-  starting_store = {  k : int(v) for (k, v) in
-    [ x.split("=") for x in args.starting_env.split(",") ]
+  # TODO(shraddha): This needs to be updated to support booleans and 
+  # arrays. You may want to write a pair of generic functions:
+  #
+  # toStr(b: BoogieVal) -> str
+  # fromStr(s: str) -> BoogieVal
+  #
+  # Note that toStr/fromStr for AstNumber and AstTrue/AstFalse are already written for you (basically .pp() and parseExprAst).
+  # You just need to handle the case for maps.
+  starting_store = {  k : v for (k, v) in
+    [ x.split("=") for x in args.starting_env.split(".") ]
   } # type: Store
 
   if (args.nond_mode == "all"):
